@@ -26,5 +26,7 @@ WHAT IS IN THIS FOLDER
  BUILD.bat, AndariumMax.exe   the tool
  Kernarium\                   the Andarium source (branch performance-fork)
  Kernarium\fork\              the fork's documents, tool source, Mac script
+ AndariumMax-source-git.tar.gz  the source's Git history in one file, for
+                              taking the fork to a Mac
  The iPhone app itself can only be built on a Mac: see
  Kernarium\fork\BUILD_INSTRUCTIONS.md.
