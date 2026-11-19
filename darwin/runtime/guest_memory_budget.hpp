@@ -12,7 +12,12 @@
  * measured for.
  *
  *     E(v, G) = c(v, G) + x(v) + t * v + E_rest
- *     c(v, G) = min(derive_budget(G, L), cap(v))      (the cap only where L != 0)
+ *     c(v, G) = capped(v, G) + raise(v, G)
+ *     capped(v, G) = min(derive_budget(G, L), cap(v)) (the cap only where L != 0)
+ *     raise(v, G) = min(B_capped(v, G) - 2048 MiB, derive_budget(G, L) - capped(v, G)),
+ *                   never under zero and zero where L is zero; B_capped is the
+ *                   host GPU's budget with the capped cache under the launch
+ *                   set (gadget_cache_raise)
  *     G_max(v) = the largest G in {512, 576, ..., C} MiB with
  *                L - G - A - E(v, G) - S >= 352 MiB; C where L is zero
  *     conservative(v) = G_max(v) under the launch set, in 512 MiB steps and
@@ -172,11 +177,13 @@ inline constexpr std::size_t slot_tag_bytes_per_executor =
 	return slot_tag_bytes_per_executor * std::max(executors, 1U);
 }
 
-/* c(v, G): the budget the gadget cache gets for a guest of `guest_memory`
- * bytes under `memory_limit` bytes (zero for none) at `executors` vCPUs. Where
- * the host sets no limit the budget derives from the guest alone and is not
- * capped, so a host without a limit behaves as it did before the cap existed. */
-[[nodiscard]] constexpr std::size_t gadget_cache_budget(
+/* capped(v, G): the budget of a guest of `guest_memory` bytes under
+ * `memory_limit` bytes (zero for none) at `executors` vCPUs before any raise.
+ * Where the host sets no limit the budget derives from the guest alone and is
+ * not capped, so a host without a limit behaves as it did before the cap
+ * existed. The JIT's executable region is sized from this one
+ * (runtime::jit_cache_budget_for), so a raise wires nothing more. */
+[[nodiscard]] constexpr std::size_t gadget_cache_capped_budget(
 	std::size_t guest_memory, std::size_t memory_limit,
 	unsigned executors) noexcept
 {
@@ -240,6 +247,70 @@ inline constexpr LaunchMemorySet launch_memory_set =
 	launch_memory_mib(64, 320, 45 + 40 + 64);
 inline constexpr LaunchMemorySet maximum_memory_set =
 	launch_memory_mib(0, 0, 0);
+
+/* The host GPU's budget a launch keeps before the gadget cache takes more
+ * than its cap: twice what a new guest's default keeps
+ * (default_gpu_budget_minimum_mib, rounded up). Every line the settings and
+ * the defaults are searched against (the floor, the default's 992 MiB) lies
+ * below it, so a raise changes none of them. */
+inline constexpr std::uint64_t gadget_cache_raise_gpu_keep_mib = 2048;
+
+/* raise(v, G): what the gadget cache gets above its cap where the process
+ * limit leaves the host GPU more than gadget_cache_raise_gpu_keep_mib, in
+ * whole MiB. The cap is the measured loads' ceiling on the devices they were
+ * measured on; a load that holds more translated code than that is relieved
+ * at the cap and translates what it shed again (cpu/gadget_cache_budget.hpp).
+ * A device whose limit leaves memory that neither the guest nor the GPU's
+ * keep line needs spends it here, up to the budget a host without a limit
+ * gives the same guest (derive_budget), which is what every macOS run uses.
+ *
+ * The surplus is evaluated with the capped cache under the conservative
+ * launch set, whatever set a caller evaluates B with, so one guest has one
+ * cache budget: the run's (runtime::set_gadget_cache_budget) and the plan's
+ * (emulator/src/gpu_budget_plan.hpp) are this one. B then stays at or above
+ * the keep line under the launch set and the maximum set, and under a set
+ * with larger terms it is lower by exactly those terms. */
+[[nodiscard]] constexpr std::size_t gadget_cache_raise(
+	std::size_t guest_memory, std::size_t memory_limit,
+	unsigned executors) noexcept
+{
+	if (memory_limit == 0)
+		return 0;
+	const auto capped = gadget_cache_capped_budget(
+		guest_memory, memory_limit, executors);
+	const auto derived = ::uml::cpu::gadget_cache::derive_budget(
+		guest_memory, memory_limit);
+	if (derived <= capped)
+		return 0;
+	const auto kept = ::uml::platform::compute_gpu_budget({
+		.process_limit = memory_limit,
+		.guest_memory = guest_memory,
+		.application = launch_memory_set.application,
+		.engine = engine_memory(capped, executors,
+			launch_memory_set.engine_rest),
+		.headroom = launch_memory_set.headroom,
+	});
+	constexpr std::uint64_t keep =
+		gadget_cache_raise_gpu_keep_mib * mebibyte;
+	if (kept.available <= keep)
+		return 0;
+	const std::uint64_t surplus = (kept.available - keep) / mebibyte *
+		mebibyte;
+	return static_cast<std::size_t>(std::min<std::uint64_t>(surplus,
+		derived - capped));
+}
+
+/* c(v, G): the budget the gadget cache gets for a guest of `guest_memory`
+ * bytes under `memory_limit` bytes (zero for none) at `executors` vCPUs: the
+ * capped budget and the raise. */
+[[nodiscard]] constexpr std::size_t gadget_cache_budget(
+	std::size_t guest_memory, std::size_t memory_limit,
+	unsigned executors) noexcept
+{
+	return gadget_cache_capped_budget(guest_memory, memory_limit,
+			executors) +
+		gadget_cache_raise(guest_memory, memory_limit, executors);
+}
 
 /* B: the host GPU's budget a launch of `guest_mib` MiB of guest RAM gets at
  * `executors` vCPUs under `memory_limit` bytes (zero for none, which gives the

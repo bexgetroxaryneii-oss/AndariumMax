@@ -168,9 +168,18 @@ place that says how; every caller evaluates it:
 
 ```text
 E(v, G) = c(v, G) + x(v) + 4 MiB * v + E_rest
-c(v, G) = min(derive_budget(G, L), cap(v))      where L is set; derive_budget(G, L) alone otherwise
+c(v, G) = capped(v, G) + raise(v, G)
+capped(v, G) = min(derive_budget(G, L), cap(v)) where L is set; derive_budget(G, L) alone otherwise
+raise(v, G) = min(B_capped - 2048 MiB, derive_budget(G, L) - capped(v, G)), at least zero; zero where L is not set
 ```
 
+`B_capped` is B with the capped cache under the conservative launch set. A
+limit that leaves the host GPU more than 2048 MiB gives the surplus to the
+gadget cache, up to the budget a host without a limit gives the same guest, so
+a raise lowers B by its own size and never below that line
+(`gadget_cache_raise`). Every size the settings and the defaults are searched
+against lies below the line, so a raise moves none of them, and the JIT's
+executable region is sized from the capped budget.
 `cap(v)` is a table of the gadget cache's ceiling per vCPU count, and `x(v)` a
 table of the most the cache's charge (open accounts plus those asked to shed)
 exceeds its budget in an Android guest's burst: the cache sheds to `c(v, G)`,

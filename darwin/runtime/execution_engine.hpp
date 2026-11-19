@@ -77,14 +77,16 @@ std::size_t set_gadget_cache_budget(std::size_t guest_memory_bytes,
 #ifndef UML_APP_STORE_RUNTIME
 /* JIT on an iOS device, where a debugger the user attached prepares the
  * executable memory once per process (cpu/jit_memory/executable_memory.hpp).
- * The JIT's cache takes the gadget cache's budget there (jit_cache_budget_for),
- * so the memory a guest side holds, and with it the host GPU's budget, does
- * not change with the engine.
+ * The JIT's cache takes the gadget cache's capped budget there
+ * (jit_cache_budget_for), never its raise, so the region it wires does not
+ * grow with the host's memory limit; the host GPU's budget counts the gadget
+ * cache's whole budget whichever engine runs.
  */
 using JitMemoryStatus = ::uml::cpu::JitMemoryStatus;
 
 /* The whole-process budget a JIT run of `guest_memory_bytes` and `executors`
- * vCPUs sets: the figure set_gadget_cache_budget would set. */
+ * vCPUs sets: the capped figure of the gadget cache
+ * (guest_memory::gadget_cache_capped_budget). */
 [[nodiscard]] std::size_t jit_cache_budget_for(
 	std::size_t guest_memory_bytes, unsigned executors) noexcept;
 

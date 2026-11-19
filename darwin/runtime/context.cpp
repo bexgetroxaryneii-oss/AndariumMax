@@ -570,7 +570,12 @@ std::size_t gadget_cache_budget_for(std::size_t guest_memory_bytes,
 std::size_t jit_cache_budget_for(std::size_t guest_memory_bytes,
 	unsigned executors) noexcept
 {
-	return gadget_cache_budget_for(guest_memory_bytes, 0, executors);
+	/* The capped budget: the region this sizes is wired for the process's
+	 * life, so the gadget cache's raise does not reach it. */
+	return guest_memory::gadget_cache_capped_budget(guest_memory_bytes,
+		static_cast<std::size_t>(
+			::uml::platform::process_memory_limit_bytes()),
+		executors);
 }
 
 JitMemoryStatus prepare_jit_memory(std::size_t guest_memory_bytes,

@@ -60,8 +60,11 @@ void the_region_fits_the_gadget_budget_of_every_device_setting()
 		for (unsigned vcpus = 1; vcpus <= guest_memory::measured_vcpu_maximum;
 		     ++vcpus) {
 			for (std::size_t guest = 1536; guest <= 4096; guest += 512) {
-				const auto budget = guest_memory::gadget_cache_budget(
-					guest * mib, limit, vcpus);
+				/* The capped budget, which is the one the JIT's
+				 * region is sized from (jit_cache_budget_for). */
+				const auto budget =
+					guest_memory::gadget_cache_capped_budget(
+						guest * mib, limit, vcpus);
 				const auto region =
 					arm64::jit_memory_region_bytes(budget, vcpus);
 				require(region != 0 && region % granule == 0,

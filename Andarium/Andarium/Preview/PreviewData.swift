@@ -119,7 +119,9 @@ enum PreviewData {
     /// its cap of the vCPU count, the burst allowance over it and 4 MiB of
     /// slot tags per vCPU and the guest, and at least 352 MiB. The cap and the
     /// allowance are the tables in `runtime/guest_memory_budget.hpp`, which
-    /// hold for the guests the sheet offers (1.5 GiB and up).
+    /// hold for the guests the sheet offers (1.5 GiB and up). The mock leaves
+    /// out the runtime's raise of the cache, which lowers B, never below
+    /// 2048 MiB, for a guest small enough to leave the GPU more than that.
     private static func budget(limitMiB: Int, memoryMiB: Int, vCPUs: Int) -> Int {
         let caps = [160, 192, 224, 256, 272, 272, 304, 304]
         let bursts = [1, 1, 1, 1, 1, 1, 1, 2]

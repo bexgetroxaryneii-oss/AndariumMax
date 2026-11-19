@@ -134,8 +134,16 @@ void theDerivedGadgetCacheCountsAsEngineMemory()
 		"an eighth of the limit, sixteen vCPUs' slot tags and the burst");
 	const auto roomy = planned("--memory-limit=8192M", "ncpus=16");
 	require(roomy.engine == (384 + 64 + 2) * mib, "a quarter of the guest");
+	/* The same limit leaves the GPU far more than the raise's keep line
+	 * (runtime/guest_memory_budget.hpp), so one vCPU's cache is raised from
+	 * its cap of 160 to the quarter of the guest. */
 	const auto roomy_one = planned("--memory-limit=8192M", "ncpus=1");
-	require(roomy_one.engine == (160 + 4 + 1) * mib, "one vCPU's cap");
+	require(roomy_one.engine == (384 + 4 + 1) * mib,
+		"one vCPU's cap raised to a quarter of the guest");
+	/* 3200 MiB leaves 3200 - 64 - 1536 - (160 + 4 + 1 + 320) - 149 = 966
+	 * under the launch set, below the keep line: the cap stands. */
+	const auto tight_one = planned("--memory-limit=3200M", "ncpus=1");
+	require(tight_one.engine == (160 + 4 + 1) * mib, "one vCPU's cap");
 }
 
 /* The most RAM the application's settings offer is the largest guest for which

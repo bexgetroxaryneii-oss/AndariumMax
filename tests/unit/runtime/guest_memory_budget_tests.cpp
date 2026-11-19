@@ -121,7 +121,7 @@ void theBurstIsTheMeasuredExcessOfTheChargeOverTheBudget()
 	require(budget::gadget_cache_burst(9) == budget::gadget_cache_burst(8));
 	require(budget::gadget_cache_burst(64) == budget::gadget_cache_burst(8));
 	/* It is no part of the budget the cache sheds to. */
-	require(budget::gadget_cache_budget(4096 * mib, std::size_t{64} << 30, 8) ==
+	require(budget::gadget_cache_capped_budget(4096 * mib, std::size_t{64} << 30, 8) ==
 		304 * mib);
 }
 
@@ -138,24 +138,190 @@ void theCacheBudgetIsCappedOnlyUnderALimit()
 {
 	constexpr std::size_t gib = std::size_t{1} << 30;
 	/* No limit: a quarter of the guest, uncapped, as before the cap. */
-	require(budget::gadget_cache_budget(8 * gib, 0, 1) == 2 * gib);
-	require(budget::gadget_cache_budget(512 * mib, 0, 8) == 128 * mib);
+	require(budget::gadget_cache_capped_budget(8 * gib, 0, 1) == 2 * gib);
+	require(budget::gadget_cache_capped_budget(512 * mib, 0, 8) == 128 * mib);
 	/* A roomy limit leaves the cap as the bound: 1024 MiB at 4096 MiB. */
-	require(budget::gadget_cache_budget(4096 * mib, 64 * gib, 1) == 160 * mib);
-	require(budget::gadget_cache_budget(4096 * mib, 64 * gib, 8) == 304 * mib);
+	require(budget::gadget_cache_capped_budget(4096 * mib, 64 * gib, 1) == 160 * mib);
+	require(budget::gadget_cache_capped_budget(4096 * mib, 64 * gib, 8) == 304 * mib);
 	/* An eighth of 2867 MiB is 358.375, above the cap up to 8 vCPUs. */
 	for (unsigned executors = 1; executors <= 8; ++executors)
-		require(budget::gadget_cache_budget(2240 * mib, ipad_limit,
+		require(budget::gadget_cache_capped_budget(2240 * mib, ipad_limit,
 				executors) == expected_cap_mib[executors - 1] * mib);
 	/* The cap is no floor: a small guest keeps its 128 MiB at any count, a
 	 * tight limit its eighth. */
-	require(budget::gadget_cache_budget(512 * mib, ipad_limit, 8) == 128 * mib);
-	require(budget::gadget_cache_budget(512 * mib, ipad_limit, 1) == 128 * mib);
-	require(budget::gadget_cache_budget(2048 * mib, 800 * mib, 8) == 100 * mib);
+	require(budget::gadget_cache_capped_budget(512 * mib, ipad_limit, 8) == 128 * mib);
+	require(budget::gadget_cache_capped_budget(512 * mib, ipad_limit, 1) == 128 * mib);
+	require(budget::gadget_cache_capped_budget(2048 * mib, 800 * mib, 8) == 100 * mib);
 	/* More vCPUs than the table measured raise the cap, then the eighth of
 	 * the limit bounds the cache. */
-	require(budget::gadget_cache_budget(4096 * mib, 64 * gib, 12) ==
+	require(budget::gadget_cache_capped_budget(4096 * mib, 64 * gib, 12) ==
 		(304 + 16 * 4) * mib);
+}
+
+/* L - G - A - E - S with the gadget cache at `cache` bytes under `set`, zero
+ * when the sum passes L: the figure the raise is held to, summed here term by
+ * term and not through the header's own evaluation of B. */
+constexpr std::uint64_t availableWithCache(std::uint64_t limit,
+	std::uint64_t guest, std::uint64_t cache, unsigned executors,
+	const budget::LaunchMemorySet &set)
+{
+	const std::uint64_t committed = guest + set.application + cache +
+		budget::gadget_cache_burst(executors) +
+		budget::slot_tag_bytes(executors) + set.engine_rest + set.headroom;
+	return limit > committed ? limit - committed : 0;
+}
+
+/* The raise is what the limit leaves the host GPU above 2048 MiB with the
+ * capped cache under the launch set, and no more than takes the cache to the
+ * budget of a host without a limit. Each row was worked out by hand in MiB;
+ * at six vCPUs the capped engine is 272 + 1 + 24 + 320 = 617. */
+void theRaiseIsWhatTheLimitLeavesAboveTheGpuKeepLine()
+{
+	struct Row {
+		std::uint64_t limit_mib;
+		std::uint64_t guest_mib;
+		unsigned executors;
+		std::uint64_t raise_mib;
+	};
+	constexpr std::array rows{
+		/* The iPad mini 6: B is far under the line at every size. */
+		Row{2867, 1536, 4, 0},
+		Row{2867, 512, 1, 0},
+		/* 6144 - 64 - 4096 - 617 - 149 = 1218: under the line. */
+		Row{6144, 4096, 6, 0},
+		/* 7168 leaves 2242, 194 above the line; an eighth of the limit,
+		 * 896, would allow 624 more than the cap of 272. */
+		Row{7168, 4096, 6, 194},
+		/* 8192 leaves 3266, 1218 above the line; a quarter of the guest
+		 * and an eighth of the limit are both 1024, 752 above the cap. */
+		Row{8192, 4096, 6, 752},
+		/* 9216 leaves 4290; the quarter of the guest still bounds it. */
+		Row{9216, 4096, 6, 752},
+		/* A larger guest leaves 9216 - 64 - 6144 - 617 - 149 = 2242. */
+		Row{9216, 6144, 6, 194},
+		/* Eight vCPUs: the cap is 304 and the engine 304 + 2 + 32 + 320. */
+		Row{12288, 4096, 8, 720},
+		/* One vCPU and a small guest: 384 is a quarter of it, the cap 160. */
+		Row{8192, 1536, 1, 224},
+		/* The smallest guest's 128 MiB is under every cap: nothing to raise. */
+		Row{8192, 512, 8, 0},
+	};
+	for (const auto &row : rows) {
+		const auto guest = static_cast<std::size_t>(row.guest_mib * mib);
+		const auto limit = static_cast<std::size_t>(row.limit_mib * mib);
+		require(budget::gadget_cache_raise(guest, limit, row.executors) ==
+			row.raise_mib * mib, "a row's raise");
+		require(budget::gadget_cache_budget(guest, limit, row.executors) ==
+			budget::gadget_cache_capped_budget(guest, limit,
+				row.executors) + row.raise_mib * mib,
+			"the budget is the capped one and the raise");
+	}
+	/* No limit: nothing is capped, so nothing is raised. */
+	require(budget::gadget_cache_raise(4096 * mib, 0, 6) == 0);
+	require(budget::gadget_cache_budget(4096 * mib, 0, 6) == 1024 * mib);
+	/* A limit that is no whole number of MiB raises by whole MiB. */
+	require(budget::gadget_cache_raise(4096 * mib, 7168 * mib + 12345, 6) ==
+		194 * mib);
+	require(budget::gadget_cache_raise_gpu_keep_mib >=
+		2 * budget::default_gpu_budget_minimum_mib,
+		"the line is at least twice what a default keeps");
+}
+
+/* A raised cache is the budget a host without a limit gives the same guest,
+ * the one every macOS run uses, and never more. */
+void aRoomyLimitRaisesTheCacheToTheBudgetWithoutALimitAndNoFurther()
+{
+	constexpr std::size_t roomy = std::size_t{64} << 30;
+	for (unsigned executors = 1; executors <= 8; ++executors)
+		for (const std::size_t guest_mib : {std::size_t{2048},
+			     std::size_t{4096}, std::size_t{8192}}) {
+			const auto raised = budget::gadget_cache_budget(
+				guest_mib * mib, roomy, executors);
+			require(raised == guest_mib * mib / 4,
+				"a quarter of the guest under a roomy limit");
+			require(raised == budget::gadget_cache_budget(
+				guest_mib * mib, 0, executors),
+				"the budget of a host without a limit");
+		}
+}
+
+/* Over every limit from 512 MiB to 16 GiB (and two larger), every vCPU count
+ * and every size a run starts: the raise is whole MiB and stays within the
+ * uncapped budget; a raised launch keeps the host GPU 2048 MiB or more under
+ * the launch set and the maximum set; B never rises with the guest; and under
+ * every set no size moves across the floor or across the 992 MiB the default
+ * is searched against, so the maximum, the conservative size and the default
+ * are the ones the capped cache gives. */
+void aRaiseKeepsTheGpuItsLineAndMovesNoSizeAcrossASearchedOne()
+{
+	constexpr std::uint64_t floor = uml::platform::gpu_budget_floor_bytes;
+	constexpr std::uint64_t graphics =
+		budget::default_gpu_budget_minimum_mib * mib;
+	constexpr std::uint64_t keep =
+		budget::gadget_cache_raise_gpu_keep_mib * mib;
+	std::uint64_t raised_launches = 0;
+	const auto check_limit = [&](std::uint64_t limit_mib) {
+		const std::uint64_t limit = limit_mib * mib;
+		for (const unsigned executors : {1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U,
+			     12U}) {
+			std::uint64_t previous = std::numeric_limits<std::uint64_t>::max();
+			for (std::uint64_t guest_mib = budget::guest_memory_minimum_mib;
+			     guest_mib <= budget::device_window_guest_memory_maximum_mib;
+			     guest_mib += budget::guest_memory_step_mib) {
+				const std::uint64_t guest = guest_mib * mib;
+				const std::uint64_t capped =
+					budget::gadget_cache_capped_budget(
+						static_cast<std::size_t>(guest),
+						static_cast<std::size_t>(limit), executors);
+				const std::uint64_t cache = budget::gadget_cache_budget(
+					static_cast<std::size_t>(guest),
+					static_cast<std::size_t>(limit), executors);
+				require(cache >= capped, "a raise never lowers the cache");
+				const std::uint64_t raise = cache - capped;
+				require(raise % mib == 0, "a raise is whole MiB");
+				require(raise == budget::gadget_cache_raise(
+					static_cast<std::size_t>(guest),
+					static_cast<std::size_t>(limit), executors));
+				if (raise != 0) {
+					++raised_launches;
+					require(cache <= uml::cpu::gadget_cache::derive_budget(
+						static_cast<std::size_t>(guest),
+						static_cast<std::size_t>(limit)),
+						"a raise stays within the uncapped budget");
+					require(availableWithCache(limit, guest, cache,
+						executors, conservative) >= keep,
+						"the launch set keeps the line");
+					require(availableWithCache(limit, guest, cache,
+						executors, no_terms) >= keep,
+						"the maximum set keeps the line");
+				}
+				const std::uint64_t now = availableWithCache(limit, guest,
+					cache, executors, conservative);
+				require(now <= previous, "B never rises with the guest");
+				previous = now;
+				for (const auto &set : all_sets) {
+					const auto before = availableWithCache(limit, guest,
+						capped, executors, set);
+					const auto after = availableWithCache(limit, guest,
+						cache, executors, set);
+					require((before >= floor) == (after >= floor),
+						"no size crosses the floor");
+					require((before >= graphics) == (after >= graphics),
+						"no size crosses the default's 992 MiB");
+					const auto evaluated = budget::gpu_budget(limit,
+						static_cast<std::uint32_t>(guest_mib), executors,
+						set);
+					require(evaluated.available == after,
+						"B is evaluated with the raised cache");
+				}
+			}
+		}
+	};
+	for (std::uint64_t limit_mib = 512; limit_mib <= 16384; limit_mib += 16)
+		check_limit(limit_mib);
+	check_limit(24576);
+	check_limit(65536);
+	require(raised_launches > 0, "some launches are raised");
 }
 
 void theEngineIsTheCacheItsBurstTheSlotTagsAndTheRest()
@@ -559,8 +725,10 @@ void onADeviceThatOffers4GiBTheDefaultKeepsAGibibyteForTheGpu()
 				"B is 992 MiB or more at the default");
 			if (actual < conservative)
 				++limited;
-			/* The cache is at its cap, so the closed form holds. */
-			require(budget::gadget_cache_budget(2048 * mib, limit,
+			/* The capped cache is at its cap, so the closed form holds:
+			 * a raise leaves B at 2048 MiB or more, so it moves no size
+			 * across the 992 MiB the search above asks for. */
+			require(budget::gadget_cache_capped_budget(2048 * mib, limit,
 					executors) == budget::gadget_cache_cap(executors));
 			const std::uint64_t spare = limit_mib - 64U - 320U -
 				(budget::gadget_cache_cap(executors) +
@@ -1050,6 +1218,12 @@ int main()
 			theSlotTagsAreFourMebibytesEach},
 		{"the-cache-budget-is-capped-only-under-a-limit",
 			theCacheBudgetIsCappedOnlyUnderALimit},
+		{"the-raise-is-what-the-limit-leaves-above-the-gpu-keep-line",
+			theRaiseIsWhatTheLimitLeavesAboveTheGpuKeepLine},
+		{"a-roomy-limit-raises-the-cache-to-the-budget-without-a-limit-and-no-further",
+			aRoomyLimitRaisesTheCacheToTheBudgetWithoutALimitAndNoFurther},
+		{"a-raise-keeps-the-gpu-its-line-and-moves-no-size-across-a-searched-one",
+			aRaiseKeepsTheGpuItsLineAndMovesNoSizeAcrossASearchedOne},
 		{"the-burst-is-the-measured-excess-of-the-charge-over-the-budget",
 			theBurstIsTheMeasuredExcessOfTheChargeOverTheBudget},
 		{"the-engine-is-the-cache-its-burst-the-slot-tags-and-the-rest",
