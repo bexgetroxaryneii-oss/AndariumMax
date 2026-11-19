@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+*.bat text eol=crlf
+*.txt text eol=crlf
