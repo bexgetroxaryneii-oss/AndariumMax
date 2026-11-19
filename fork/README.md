@@ -16,5 +16,6 @@ Kernarium. Nothing outside it is changed, so upstream merges stay clean.
 | [`tool/`](tool) | AndariumMax: measures and tunes the Android guest over adb |
 | [`windows/`](windows) | One-step build of the tool on Windows |
 | [`mac/`](mac) | Build script for the iOS app (needs a Mac) |
+| [`tests/`](tests) | One command for every test that needs no Apple SDK |
 
 Made by Claude Strife - X. Licence: GPL-2.0-or-later, as upstream.

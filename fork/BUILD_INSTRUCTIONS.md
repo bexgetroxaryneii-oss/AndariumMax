@@ -21,7 +21,33 @@ downloads adb (Google's platform-tools), builds with live output, and opens
 
 Tests: `cargo test` in `fork/tool` (16 tests; they need no phone).
 
+## Tests on Linux or Windows (WSL), no Apple SDK
+
+```sh
+fork/tests/run-host-tests.sh
+```
+
+It builds and runs the runtime's memory-budget unit tests and the gadget
+cache budget tests natively, the repository's licence and portability checks,
+and the tool's tests.
+
+## Branches
+
+| Branch | What it is |
+| --- | --- |
+| `baseline-upstream` | upstream `fbe12ee`, untouched: the build to compare against |
+| `performance-fork` | the baseline plus the fork's commits |
+
+Build both the same way on the Mac and install them under different bundle
+identifiers, or one after the other, to compare on the phone.
+
 ## App on a Mac
+
+On the Mac, the focused test of the fork's change is:
+
+```sh
+cmake --workflow --preset check-unit      # or: ctest -R '^runtime-guest-memory-budget$'
+```
 
 `fork/mac/build-ipa.sh` runs the steps upstream documents, in order, and
 stops with the reason at the first one that fails. It has not been run yet:

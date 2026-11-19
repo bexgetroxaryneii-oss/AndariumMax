@@ -1,47 +1,90 @@
 <!-- SPDX-License-Identifier: GPL-2.0-or-later -->
 # Optimization plan
 
-## The finding that shapes the plan
+## What was inspected
 
-Upstream has run and recorded about three hundred engine experiments, each on
-matched builds on real devices ([`docs/optimization-history.md`](../docs/optimization-history.md)).
-Most of the obvious ideas are in it, measured and rejected: larger caches,
-extra translation tiers, prefetching, dispatch rewrites, lock replacements,
-performance/efficiency core topologies. Upstream's own rule is that a gadget
-change is measured on a device before it stays.
+The arm64 gadget engine and its cache (`darwin/cpu`), the JIT and its
+executable memory (`darwin/cpu/arm64/jit`, `darwin/cpu/jit_memory`), the
+ahead-of-time component (`darwin/cpu/arm64/aot`, `tools/aot`), the memory
+budgets (`darwin/runtime/guest_memory_budget.hpp`, `darwin/platform/gpu_budget.hpp`),
+the session record (`darwin/runtime/session_record.cpp`), the Android product
+(`android/lineage-24`), the graphics path (`docs/graphics.md`, `darwin/device/gpu`),
+the last 400 fetched upstream commits and all of
+[`docs/optimization-history.md`](../docs/optimization-history.md).
 
-So this fork does not edit the CPU engine, the JIT, the MMU or the graphics
-stack without a Mac and a phone to measure on. A blind change there is far
-more likely to slow Android down or corrupt it than to speed it up.
+Upstream has recorded about three hundred engine experiments, each on matched
+builds on devices. The fork does not repeat them and does not change gadget,
+JIT, MMU or graphics code that only a device can validate.
 
-## Order of work
+## The three most promising bottlenecks
 
-| # | Item | Status | Needs |
+| # | Bottleneck | Evidence | Status |
 | --- | --- | --- | --- |
-| 1 | Measuring tool that works from Windows over adb | Done, v0.1; parsers unit-tested, not yet run on a phone | - |
-| 2 | Baseline on the target phone with the upstream build | Open | the phone, 15 minutes |
-| 3 | Settings sweep: vCPUs (4, 6), RAM, resolution, JIT on/off, per game | Open | item 2 |
-| 4 | Per-app ART `speed` compile, measured before and after | Tool has it; effect unmeasured | item 2 |
-| 5 | Sideload a development build to get the JIT row | Open | Mac build or upstream IPA |
-| 6 | iOS build pipeline (`mac/build-ipa.sh`) run end to end | Written, never run | a Mac with Xcode 27 |
-| 7 | Performance settings in the app (frame-rate cap, benchmark mode, launch timer in the stats overlay) | Not started | item 6, to compile and test Swift |
-| 8 | 120 Hz guest display mode as an option | Hypothesis | item 6 and device measurement |
-| 9 | Engine work guided by upstream's `tests/perf` runners | Not planned until 6 works | Mac, cable, matched ABBA runs |
+| 1 | Translated-code cache held to a per-vCPU cap (272 MiB at 6 vCPUs). A program past it is shed whole and translated again; an Android guest at the cap relieves tens of times a session | Upstream G296, G297, G298 measured the mechanism on a 6-vCPU iPhone and on a Mac | Mechanism confirmed by upstream. Whether this phone's limit leaves room, and how often its games hit the cap, needs the phone's session record |
+| 2 | vCPU threads on efficiency cores. The phone has 2 fast and 4 efficiency cores and the guest gets 6 uniform vCPUs | Upstream G176, G177: binding to core types is not available through supported APIs and an asymmetric topology regressed boot. The session record's `perf` column is the share of CPU time on fast cores | Needs device data: `perf` at 4 and at 6 vCPUs for the same game |
+| 3 | Application code that the ahead-of-time component cannot cover. It translates Android's own libraries; an installed game's code runs on the gadget engine, and its Java in ART's interpreter until ART compiles it | Upstream AOT2: boot at 0.72 of the engine's time with system libraries covered; nothing covers installed apps | Half confirmed. The ART part is measurable today over adb (the tool's speed-compile, before and after); the native part needs the JIT or a device profile |
 
-## Why items 3 and 4 come first
+Graphics (Virgl or Venus through Zink and KosmicKrisp to Metal) is the next
+candidate after these. It needs Instruments on a Mac: the guest cannot tell a
+presented frame from a discarded one.
 
-They are the only levers that exist today without a Mac, and each is
-reversible and measurable:
+## The optimization selected
 
-- vCPU count: upstream found the best count is device-specific and that
-  more is not always better (boot sweeps in the optimization history). The
-  phone has 2 fast and 4 efficiency cores; whether 6 vCPUs beat 4 for a given
-  game is an open question the sweep answers.
-- Resolution: the default is the choice nearest 2.0x; 1.0x and 1.5x cut GPU
-  work. Only measurement says whether a game is GPU-bound here.
-- JIT: upstream states launches get several times slower and long
-  single-process work gets faster. A game may land on either side.
-- ART `speed`: one Android command per app, undone by one command.
+Bottleneck 1 is the only one whose remedy is plain arithmetic that this
+machine can build and test completely. It is implemented in the emulator:
+
+- `darwin/runtime/guest_memory_budget.hpp`: `gadget_cache_raise`. Where the
+  process limit leaves the host GPU more than 2048 MiB with the capped cache,
+  the surplus goes to the gadget cache, up to the budget a host without a
+  limit gives the same guest (what every macOS run already uses).
+- The raise comes out of the GPU's budget and leaves it at 2048 MiB or more.
+  The maximum, conservative and default guest sizes and the graphics warning
+  line do not move; the unit test holds that for every limit up to 16 GiB.
+- `darwin/runtime/context.cpp`: the JIT's wired region stays sized from the
+  capped budget.
+
+What it does at 6 vCPUs, computed by the built code (MiB):
+
+| Process limit | Guest RAM | Cache before | Cache after | GPU budget before | after |
+| --- | --- | --- | --- | --- | --- |
+| 5120 | 3072 (default) | 272 | 272 | 1218 | 1218 |
+| 5120 | 2048 | 272 | 466 | 2242 | 2048 |
+| 6144 | 3072 | 272 | 466 | 2242 | 2048 |
+| 7168 | 4096 (default) | 272 | 466 | 2242 | 2048 |
+| 8192 | 4096 (default) | 272 | 1024 | 3266 | 2514 |
+| 9216 | 4096 (default) | 272 | 1024 | 4290 | 3538 |
+
+Upstream's preview mock assumes 5120 MiB for an iPhone 18 Pro Max
+(`Andarium/Andarium/Preview/PreviewData.swift`). If that is the real limit,
+the change does nothing at the default guest size and acts only on a guest of
+about 2.2 GiB or less. The real limit is the first thing to read off the phone.
+
+No speed change is claimed. Nothing has been measured.
+
+## Device testing this needs
+
+1. The limit. In Andarium's statistics the VRAM row is "used / budget"; with
+   the guest's RAM and vCPU count that gives the limit:
+   `limit = budget + guest RAM + 830` at 6 vCPUs, in MiB.
+2. A baseline session record. Play one heavy game for ten minutes on the
+   upstream build, then Settings > Create bug report. The zip's `andarium/`
+   folder holds the session record; its history rows carry `cache`,
+   `reliefs`, `shed`, `largest`, `gap` (worst frame gap), `perf` and
+   `thermal`.
+3. The same game, same settings, on a build of this branch. Compare
+   `reliefs`, `shed` and `gap`. Fewer reliefs with a smaller worst gap
+   supports the change; equal figures mean the cap was not binding.
+
+## Order of work after this
+
+| # | Item | Needs |
+| --- | --- | --- |
+| 1 | Read the limit and a baseline session record from the phone | the phone, 15 minutes |
+| 2 | Build this branch into an IPA | a Mac with Xcode 27, or a hosted macOS build you authorise |
+| 3 | A/B the cache raise (above) | items 1 and 2 |
+| 4 | vCPU sweep, 4 against 6, reading `perf` | item 1 |
+| 5 | Lower the keep line if session records show GPU memory unused and the cache relieved | item 3 |
+| 6 | Engine work with upstream's `tests/perf` runners | Mac, cable, matched runs |
 
 ## Things this fork will not do
 

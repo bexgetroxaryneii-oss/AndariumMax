@@ -20,6 +20,25 @@ target phone produces it.
 | Cold and warm boot | Andarium's boot screen; stopwatch | by hand |
 | Engine-level profiles | upstream `tests/perf` runners, Instruments | a Mac and a cable |
 
+## The session record (host side, no Mac needed)
+
+The runtime writes a session record that Andarium adds to a bug report
+(Settings > Create bug report, folder `andarium/` in the zip). Its history
+rows are the device's own readings, one row per checkpoint:
+
+| Column | Meaning |
+| --- | --- |
+| `footprint`, `available` | the process's memory and what the limit still leaves; their sum is the limit |
+| `guest`, `gpu`, `graphics` | guest RAM held, host GPU memory |
+| `cache` | bytes the gadget cache holds |
+| `reliefs`, `shed`, `renewals`, `largest` | cache reliefs, accounts shed, and the largest program's bytes |
+| `frames`, `gap` | frames flushed and the longest gap between two |
+| `thermal`, `pressure` | iOS thermal state and memory pressure |
+| `cpu`, `vcpu`, `perf` | process and vCPU time, and the share on fast cores |
+
+This is the baseline the fork's cache change is judged against
+([`OPTIMIZATION_PLAN.md`](OPTIMIZATION_PLAN.md)).
+
 ## Procedure for a comparable run
 
 1. Same Andarium build and the same Andarium settings (vCPUs, RAM,
