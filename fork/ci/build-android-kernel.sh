@@ -63,14 +63,15 @@ print("[andariummax-ci] descriptor rewritten for this runner (development build 
 PY
 }
 
+step "Host tools"
+ensure_host_tools
+
 if [ -d "$BUNDLE_DIR" ]; then
 	note "kernel bundle restored from cache: $BUNDLE_DIR"
 	sync_descriptor
 	exit 0
 fi
 
-step "Host tools"
-ensure_host_tools
 [ -f .build/dependencies/kernel-host-tools/lib/libelf.a ] ||
 	fail "kernel host tools missing: the dependencies job must run first"
 
