@@ -10,18 +10,22 @@ name: AndariumMax iOS build
 on:
   workflow_dispatch:
     inputs:
-      system_release_tag:
+      system_mode:
         description: >-
-          Release tag in THIS repository whose assets hold the Android system
-          (andarium-system*.zip = a staged folder; android-release* = a release
-          directory). Empty = compile-check IPA without Android.
+          Android system: upstream = download upstream's published accepted
+          release (default); tag = an asset of system_release_tag in this repo;
+          none = compile-check IPA without Android
+        type: choice
+        options: [upstream, tag, none]
+        default: upstream
+      system_release_tag:
+        description: Release tag in THIS repo (only for system_mode = tag)
         required: false
         default: ""
-      system_mode:
-        description: How to read that asset
-        type: choice
-        options: [auto, staged, release]
-        default: auto
+      build_aot:
+        description: Build the ahead-of-time code from the release
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -125,7 +129,7 @@ jobs:
           key: kernel-android-${{ hashFiles('kernel/**') }}
           fail-on-cache-miss: true
 
-      - name: Fetch the Android system (optional)
+      - name: Choose the Android system
         id: system
         env:
           GH_TOKEN: ${{ github.token }}
@@ -133,22 +137,20 @@ jobs:
           MODE: ${{ inputs.system_mode }}
         run: |
           set -euo pipefail
-          if [ -z "$TAG" ]; then
-            echo "mode=none" >> "$GITHUB_OUTPUT"
-            echo "No system_release_tag: building a compile-check IPA."
+          if [ "$MODE" != tag ]; then
+            echo "mode=$MODE" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          [ -n "$TAG" ] || { echo "::error::system_mode tag needs system_release_tag"; exit 1; }
           mkdir -p .build/ci/system-download
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
             --dir .build/ci/system-download --pattern 'andarium-system*' --pattern 'android-release*'
           file=$(ls .build/ci/system-download/* | head -1)
           [ -f "$file" ] || { echo "::error::release $TAG has no andarium-system* or android-release* asset"; exit 1; }
-          if [ "$MODE" = auto ]; then
-            case "$(basename "$file")" in
-              andarium-system*) MODE=staged ;;
-              *) MODE=release ;;
-            esac
-          fi
+          case "$(basename "$file")" in
+            andarium-system*) MODE=staged ;;
+            *) MODE=release ;;
+          esac
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "archive=$file" >> "$GITHUB_OUTPUT"
           ls -lh "$file"
@@ -158,6 +160,7 @@ jobs:
         env:
           SYSTEM_MODE: ${{ steps.system.outputs.mode }}
           SYSTEM_ARCHIVE: ${{ steps.system.outputs.archive }}
+          BUILD_AOT: ${{ inputs.build_aot && '1' || '0' }}
           IPA_LABEL: ${{ github.ref_name }}-run${{ github.run_number }}
         run: fork/ci/build-app.sh
 

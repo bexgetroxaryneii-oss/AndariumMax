@@ -7,7 +7,9 @@
 # SideStore signs on the phone. Steps follow Andarium/README.md ("Build").
 #
 # Environment:
-#   SYSTEM_MODE   release | staged | none
+#   SYSTEM_MODE   upstream | release | staged | none
+#                 upstream: download the accepted release that upstream
+#                          publishes (SYSTEM_URL, default below) and install it
 #                 release: SYSTEM_ARCHIVE holds an Android release directory
 #                          (android/lineage-24/README.md, "Release installation")
 #                 staged:  SYSTEM_ARCHIVE holds an already staged
@@ -19,7 +21,12 @@
 
 source "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
 
-SYSTEM_MODE=${SYSTEM_MODE:-none}
+SYSTEM_MODE=${SYSTEM_MODE:-upstream}
+# Upstream's public release asset for the accepted release (accepted-release.env).
+SYSTEM_URL=${SYSTEM_URL:-https://github.com/imxieyi/Kernarium/releases/download/1.0b15-release/lineage24-mainline6.18-4k-20261115-los24-r28.tar.gz}
+# Build the ahead-of-time code from the installed release (tools/aot); 0 skips it.
+BUILD_AOT=${BUILD_AOT:-1}
+AOT_DIR=
 IPA_LABEL=${IPA_LABEL:-local}
 OUT=.build/ci
 LOGS=$OUT/logs
@@ -70,29 +77,33 @@ step "Sources the framework packaging builds (GPT fdisk, zstd)"
 dependencies/prepare.sh --product ios-storage
 dependencies/prepare.sh --product ios-compression
 
-step "Configure the iOS device Android runtime"
-logged cmake-configure cmake --preset kernarium-ios-device-android \
-	-DPython3_EXECUTABLE="$(command -v python3)"
-grep -E 'UML_AOT' .build/kernarium-runtime-ios-device-android-4k/CMakeCache.txt \
-	| sed 's/^/[andariummax-ci] /' || true
-
-step "Build the runtime"
-logged cmake-build cmake --build --preset kernarium-ios-device-android -j "$JOBS"
-disk_report
-
-step "Package the iOS frameworks (Android runtime only)"
-logged package-frameworks Kernarium/scripts/package-ios-frameworks.sh --runtimes android
-
 step "Android system ($SYSTEM_MODE)"
 rm -rf .build/andarium-system
+install_release_dir()
+{
+	local release_dir
+	release_dir=$(dirname "$(find "$1" -name release-manifest.json | head -1)")
+	[ -f "$release_dir/release-manifest.json" ] || fail "no release-manifest.json in the system archive"
+	release_dir=$(CDPATH= cd -- "$release_dir" && pwd -P)
+	logged install-release python3 android/lineage-24/tools/install-release.py --source "$release_dir"
+}
+
 case "$SYSTEM_MODE" in
+upstream)
+	note "downloading $SYSTEM_URL"
+	mkdir -p "$OUT/system-download"
+	curl -fL --retry 3 --progress-bar -o "$OUT/system-download/release.tar.gz" "$SYSTEM_URL"
+	extract "$OUT/system-download/release.tar.gz" "$OUT/system-release"
+	rm -f "$OUT/system-download/release.tar.gz"
+	install_release_dir "$OUT/system-release"
+	rm -rf "$OUT/system-release"
+	BOOTABLE=1
+	;;
 release)
 	[ -f "${SYSTEM_ARCHIVE:-}" ] || fail "SYSTEM_ARCHIVE is not a file"
 	extract "$SYSTEM_ARCHIVE" "$OUT/system-release"
-	release_dir=$(dirname "$(find "$OUT/system-release" -name 'release-manifest*.json' | head -1)")
-	[ -d "$release_dir" ] || fail "no release manifest in the system archive"
-	logged install-release python3 android/lineage-24/tools/install-release.py --source "$release_dir"
-	logged stage-system python3 Andarium/scripts/stage-system-image.py
+	install_release_dir "$OUT/system-release"
+	rm -rf "$OUT/system-release"
 	BOOTABLE=1
 	;;
 staged)
@@ -114,9 +125,50 @@ EOF
 	BOOTABLE=0
 	summary "> ⚠️ No Android system image was supplied: this IPA cannot boot Android."
 	;;
-*) fail "SYSTEM_MODE must be release, staged or none" ;;
+*) fail "SYSTEM_MODE must be upstream, release, staged or none" ;;
 esac
+if [ "$SYSTEM_MODE" = upstream ] || [ "$SYSTEM_MODE" = release ]; then
+	logged stage-system python3 Andarium/scripts/stage-system-image.py
+fi
+disk_report
 du -sh .build/andarium-system | sed 's/^/[andariummax-ci] system: /'
+
+step "Ahead-of-time code from the installed release"
+if [ "$BUILD_AOT" = 1 ] && [ -d .build/android/releases ]; then
+	installed=$(find .build/android/releases -mindepth 1 -maxdepth 1 -type d | head -1)
+	FSCK_EROFS=$(command -v fsck.erofs || true)
+	if [ -n "$installed" ] && [ -n "$FSCK_EROFS" ]; then
+		AOT_DIR=$OUT/aot-artifact
+		rm -rf "$AOT_DIR"
+		if python3 tools/aot/release_artifact.py build --release "$installed" \
+			--fsck-erofs "$FSCK_EROFS" --out "$AOT_DIR" --jobs "$JOBS" 2>&1 | tee "$LOGS/aot-build.log"; then
+			note "AOT artifact built: $AOT_DIR"
+			AOT_DIR=$(CDPATH= cd -- "$AOT_DIR" && pwd -P)
+		else
+			printf '::warning::AOT build failed; building without ahead-of-time code (see aot-build.log)\n'
+			AOT_DIR=""
+		fi
+	else
+		printf '::warning::no installed release or fsck.erofs; building without ahead-of-time code\n'
+	fi
+else
+	note "AOT skipped (BUILD_AOT=$BUILD_AOT, mode $SYSTEM_MODE)"
+fi
+
+step "Configure the iOS device Android runtime"
+AOT_ARGS=()
+[ -n "$AOT_DIR" ] && AOT_ARGS=(-DUML_AOT_ARTIFACT="$AOT_DIR")
+logged cmake-configure cmake --preset kernarium-ios-device-android \
+	-DPython3_EXECUTABLE="$(command -v python3)" ${AOT_ARGS[@]+"${AOT_ARGS[@]}"}
+grep -E 'UML_AOT' .build/kernarium-runtime-ios-device-android-4k/CMakeCache.txt \
+	| sed 's/^/[andariummax-ci] /' || true
+
+step "Build the runtime"
+logged cmake-build cmake --build --preset kernarium-ios-device-android -j "$JOBS"
+disk_report
+
+step "Package the iOS frameworks (Android runtime only)"
+logged package-frameworks Kernarium/scripts/package-ios-frameworks.sh --runtimes android
 
 step "Archive Andarium (Release, unsigned)"
 ARCHIVE=$OUT/Andarium.xcarchive

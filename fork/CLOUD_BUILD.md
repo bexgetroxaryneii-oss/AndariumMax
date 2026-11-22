@@ -15,8 +15,8 @@ Checked against the checkout at `baseline-upstream` (upstream `fbe12ee`).
 | Dependency prefixes: Mesa 26.2.6 (Zink + KosmicKrisp), virglrenderer, libepoxy, GLib, libslirp, GPT fdisk, zstd | pinned sources + patch series | `dependencies/prepare.sh` then the `build-*.sh` scripts | built, then cached |
 | Kernel host tools (pahole, libelf) | pinned | `build-kernel-host-tools.sh` | built, cached |
 | Android kernel bundle (`android-6.18-arm64-4k`) | patch series only; **no published bundle** | `kernel/mainline-6.18/build/build-kernel.sh --product android` on macOS | built, cached |
-| **Android system image** (LineageOS 24 release `20261115-los24-r28`) | descriptor only; **no published release** | `android/lineage-24/build/*` on a large x86_64 Linux builder | **not buildable on a GitHub runner**: you supply it (below) |
-| AOT artifact (`UmlArm64Aot`) | **none accepted** (`accepted-aot.env` absent) | `tools/aot` from a release image | not built: `UML_AOT_MODE=AUTO` builds without it |
+| **Android system image** (LineageOS 24 release `20261115-los24-r28`) | descriptor only | **upstream publishes it**: release `1.0b15-release`, asset `lineage24-mainline6.18-4k-20261115-los24-r28.tar.gz` (~1 GB) | downloaded, installed with `install-release.py`, staged |
+| AOT artifact (`UmlArm64Aot`) | none accepted (`accepted-aot.env` absent) | `tools/aot/release_artifact.py build` from the installed release | built on the runner and passed as `UML_AOT_ARTIFACT`; skipped with a warning if it fails |
 | Signing team | ignored local file | `GuestHost/Config/Signing.local.xcconfig` | not used: the IPA is unsigned |
 | Submodules | none | — | — |
 
@@ -26,15 +26,16 @@ through Mesa Zink on KosmicKrisp (Metal 4) with virglrenderer/Venus, audio as
 the Virtio Sound provider (`UML_BUILD_AUDIO`), the Android guest in
 `android/lineage-24`.
 
-Two facts change what you get:
+Notes:
 
-- **Without a system image the IPA cannot boot Android.** The cloud build then
-  makes a *compile-check* IPA (its name ends `compile-check-NO-ANDROID`). It
-  proves the code builds; it is not a usable app.
-- **No AOT artifact is accepted in this checkout,** so the cloud IPA has no
-  ahead-of-time code. The TestFlight Andarium may carry it, so a cloud build
-  can be slower than TestFlight for reasons that are not the fork's changes.
-  Compare cloud builds with cloud builds.
+- The system release is the exact one `accepted-release.env` names, so no
+  substitute image is used. Its kernel is the one this checkout builds
+  (upstream's published kernel `vd2` is older than the accepted `ca1`).
+- `system_mode = none` still makes a *compile-check* IPA (name ends
+  `compile-check-NO-ANDROID`) for quick compile tests.
+- If the AOT build fails the IPA has no ahead-of-time code and can be slower
+  than upstream's; the run shows a warning. Compare cloud builds with cloud
+  builds.
 
 ## 2. The pipeline
 
@@ -69,29 +70,17 @@ Build config is separate from performance work: these files are on branch
 Running the workflow on `baseline-upstream`-plus-CI vs `performance-fork`
 gives the before/after pair.
 
-## 3. Supplying the Android system
+## 3. Supplying a different Android system
 
-Upload it as an asset of a release in **your** GitHub repository (keep that
+By default the workflow downloads upstream's accepted release. To use another
+one, upload it as an asset of a release in **your** GitHub repository (keep that
 repository private if you do not want to redistribute the image), then start
-the workflow with `system_release_tag` set to that tag.
+the workflow with `system_mode = tag` and `system_release_tag` set to that tag.
 
 | Asset name | Meaning | Mode |
 | --- | --- | --- |
 | `andarium-system*.zip` | an already staged `andarium-system` folder | `staged` |
 | `android-release*.zip / .tar.zst` | a release directory with its `release-manifest` | `release` (installed and staged by the repo's scripts) |
-
-Ways to get one, best first:
-
-1. **Ask upstream (imxieyi) for the release** matching `accepted-release.env`
-   (`20261115-los24-r28`). Exact match, no guessing.
-2. **Copy the staged folder out of the TestFlight app on an Apple silicon
-   Mac.** Andarium is offered to Macs in Designed for iPad mode and bundles
-   `andarium-system` as it stands. Unverified: the folder's exact place in the
-   installed bundle, and whether that TestFlight build's system matches this
-   checkout's kernel ABI. A mismatch fails at boot, not at build.
-3. **Build LineageOS yourself** on a rented x86_64 Linux machine with
-   hundreds of GB of disk (`android/lineage-24/README.md`). Hours of work and
-   cost; only worth it for changing Android itself.
 
 ## 4. Signing and SideStore
 
