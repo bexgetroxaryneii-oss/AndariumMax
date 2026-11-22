@@ -1,6 +1,42 @@
 <!-- SPDX-License-Identifier: GPL-2.0-or-later -->
 # Performance changelog
 
+## v0.3 (2026-11-22)
+
+Base: `performance-fork` v0.2 plus the cloud build (`cloud-build`).
+
+| File | Change |
+| --- | --- |
+| `Andarium/Andarium/Live/StikDebugLink.swift` | new: StikDebug's `enable-jit` link for this process, with `universal.js` |
+| `Andarium/Andarium/Shared/Model.swift` | `requestJitFromStikDebug`, `requestJitAtOpenIfWanted`: ask StikDebug, wait up to 60 s for the debugger, prepare the memory |
+| `Andarium/Andarium/Shared/Jit.swift` | `JitRequestState`, footer sentences, `canRequest` |
+| `Andarium/Andarium/Shared/HomeSections.swift` | the JIT row asks StikDebug when turned on, and offers "Enable JIT with StikDebug" |
+| `Andarium/Andarium/Shared/RuntimeDriver.swift`, `Live/LiveRuntime.swift` | `requestJitDebugger` |
+| `Andarium/AndariumTests/JitTests.swift`, `UpdateFlowTests.swift` | 4 tests and the stub's StikDebug |
+| `Andarium/Localization/JIT.xcstrings` | 4 strings, ja / zh-Hans / zh-Hant |
+| `darwin/device/audio/in_process_service.cpp`, `README.md` | the Virtio Sound service thread runs at user-interactive QoS |
+| `fork/ci/build-app.sh` | AOT artifact built from the installed release and passed to the runtime |
+
+Why JIT showed as off: a fresh install keeps the JIT row off, and a launch
+from StikDebug with the row off tells the debugger to leave. StikDebug then
+reports success while Home says to open Andarium from StikDebug, and turning
+the row on afterwards could not get the debugger back in that process.
+
+Why audio may crackle: the guest's ALSA ring is 1024 frames (four 5 ms
+periods, about 21 ms). The host thread that completes those periods had no
+QoS of its own. The ring size itself is an Android release input
+(`ro.hardware.audio.tinyalsa.*`) and needs a rebuilt release to change.
+
+Tests run on Linux: `localization.py check` (catalogs complete),
+`fork/tests/run-host-tests.sh` (unit tests, licence and portability checks,
+tool tests). Not run here: the Swift tests (need the iOS Simulator runtime),
+anything on the phone. Compilation is checked by the cloud build.
+
+Rollback: revert the commit (`git revert`), or build `cloud-build`, which
+is upstream plus the build scripts only.
+
+Measured performance change: none claimed yet.
+
 ## v0.2 (2026-11-19)
 
 Base: upstream `fbe12ee`, kept as the branch `baseline-upstream`.
