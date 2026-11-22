@@ -82,7 +82,7 @@ ensure_host_tools()
 	git config --global user.name >/dev/null 2>&1 ||
 		git config --global user.name "AndariumMax CI"
 	git config --global user.email >/dev/null 2>&1 ||
-		git config --global user.email "andariummax-ci@users.noreply.github.com"
+		git config --global user.email "${GITHUB_ACTOR:-ci}@users.noreply.github.com"
 	note "xcode: $(xcodebuild -version | tr '\n' ' ')"
 	note "cmake: $(cmake --version | head -1), python: $(python3 --version)"
 }
