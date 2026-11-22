@@ -27,13 +27,12 @@ sync_descriptor()
 {
 	step "Check the accepted descriptor against the bundle"
 	python3 - "$BUNDLE_DIR" "$DESCRIPTOR" <<'PY'
-import json, sys
+import sys
 from pathlib import Path
 bundle, descriptor = Path(sys.argv[1]), Path(sys.argv[2])
-manifests = sorted(bundle.rglob("manifest.json"))
-if not manifests:
-    sys.exit(f"no manifest.json in {bundle}")
-m = json.loads(manifests[0].read_text())
+sys.path.insert(0, "kernel/common/artifacts")
+from kernel_artifact import load_manifest  # kernel-artifact.json, validated
+m = load_manifest(bundle)
 want = {
     "SCHEMA": m["schema_version"], "RELEASE_ID": m["release_id"],
     "DIRECTORY_NAME": m["directory_name"], "FAMILY": m["family"],
