@@ -107,7 +107,7 @@ mkdir -p .build/kernel/artifacts
 python3 kernel/mainline-6.18/build/publish-artifact.py \
 	--source "$VOLUME/linux" --build "$VOLUME/build-android" \
 	--product android --slice arm64 \
-	--output-root .build/kernel/artifacts --release-id "$RELEASE_ID" \
+	--output-root "$ROOT_DIR/.build/kernel/artifacts" --release-id "$RELEASE_ID" \
 	--objcopy "$LLVM_BIN/llvm-objcopy"
 [ -d "$BUNDLE_DIR" ] || fail "publisher did not create $BUNDLE_DIR"
 sync_descriptor
