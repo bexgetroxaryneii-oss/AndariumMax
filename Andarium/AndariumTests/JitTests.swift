@@ -387,4 +387,52 @@ struct JitAtLaunchTests {
         #expect(model.jitLastStart == nil)
         #expect(driver.jitAsked.last?.wanted == false)
     }
+
+    @Test func askingStikDebugFromAndariumPreparesTheMemoryOnceItAttaches() async {
+        let (model, driver) = model(jitOn: false, attached: false)
+        driver.stikDebugAttaches = true
+        model.requestJitFromStikDebug()
+        #expect(model.jitOn)
+        #expect(model.jitStatus.footer == JitStatus.waiting)
+        await model.waitForJitLaunch()
+        #expect(driver.stikDebugAsked == 1)
+        #expect(driver.jitAsked.map(\.wanted) == [true])
+        #expect(model.jitPrepared == standard)
+        #expect(model.jitRequest == .idle)
+        #expect(model.jitStatus.footer == JitStatus.ready)
+    }
+
+    @Test func anAttachedDebuggerIsUsedWithoutAskingStikDebugAgain() async {
+        let (model, driver) = model(jitOn: false, attached: true)
+        model.requestJitFromStikDebug()
+        await model.waitForJitLaunch()
+        #expect(driver.stikDebugAsked == 0)
+        #expect(model.jitPrepared == standard)
+    }
+
+    @Test func withoutStikDebugTheFooterSaysSoAndTheGuestStillStarts() async {
+        let (model, driver) = model(jitOn: false, attached: false)
+        model.requestJitFromStikDebug()
+        await model.waitForJitLaunch()
+        #expect(model.jitRequest == .notSent)
+        #expect(model.jitStatus.footer == JitStatus.notSent)
+        #expect(model.jitStatus.canRequest)
+        driver.jitAnswer = .noDebugger
+        let onJit = await model.startOnJit(standard)
+        #expect(!onJit)
+    }
+
+    @Test func homeAsksStikDebugOnceAtOpenOnlyWhenTheJitIsKeptOn() async {
+        let (model, driver) = model(jitOn: true, attached: false)
+        driver.stikDebugAttaches = true
+        await model.requestJitAtOpenIfWanted()
+        await model.waitForJitLaunch()
+        await model.requestJitAtOpenIfWanted()
+        #expect(driver.stikDebugAsked == 1)
+        #expect(model.jitPrepared == standard)
+
+        let (off, offDriver) = self.model(jitOn: false, attached: false)
+        await off.requestJitAtOpenIfWanted()
+        #expect(offDriver.stikDebugAsked == 0)
+    }
 }

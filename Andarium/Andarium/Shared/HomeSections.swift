@@ -538,10 +538,19 @@ struct JitSection: View {
     var body: some View {
         if model.jitAvailable, model.guest != nil {
             HomeSection(verbatim: "JIT") {
-                OptionRow(title: "JIT", symbol: "bolt.fill") {
+                let status = model.jitStatus
+                OptionRow(
+                    title: "JIT", symbol: "bolt.fill",
+                    detail: model.jitOn && status.canRequest && !status.usable ? JitStatus.enableButton : nil,
+                    detailAction: { model.requestJitFromStikDebug() }
+                ) {
                     Toggle(isOn: Binding(
                         get: { model.jitOn },
-                        set: { model.setJit($0) }
+                        set: { on in
+                            model.setJit(on)
+                            // Turned on with nobody to prepare it: ask StikDebug now.
+                            if on, !model.jitStatus.usable { model.requestJitFromStikDebug() }
+                        }
                     )) { Text(verbatim: "JIT") }
                     .labelsHidden()
                 }
@@ -549,7 +558,10 @@ struct JitSection: View {
                 SectionNote(model.jitStatus.footer)
             }
             .id("jit")
-            .task { model.refreshJit() }
+            .task {
+                model.refreshJit()
+                await model.requestJitAtOpenIfWanted()
+            }
         }
     }
 }

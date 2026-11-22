@@ -159,6 +159,18 @@ nonisolated enum JitAnswer: Equatable, Sendable {
     }
 }
 
+/// Where a request to StikDebug that Andarium made itself stands.
+nonisolated enum JitRequestState: Equatable, Sendable {
+    /// No request is under way, or the last one reached the debugger.
+    case idle
+    /// StikDebug was asked; Andarium waits for its debugger.
+    case waiting
+    /// No app took StikDebug's link.
+    case notSent
+    /// StikDebug took the link but never attached.
+    case timedOut
+}
+
 /// What Home says under the JIT row.
 struct JitStatus: Equatable, Sendable {
     /// A debugger is attached to Andarium now.
@@ -174,15 +186,27 @@ struct JitStatus: Equatable, Sendable {
     /// memory unprepared. The process makes one attempt.
     var launch: JitAnswer?
 
+    /// Where a request to StikDebug made from Andarium stands.
+    var request: JitRequestState
+
     init(
         debuggerAttached: Bool, prepared: JitShape? = nil, guest: JitShape? = nil, lastStart: JitAnswer? = nil,
-        launch: JitAnswer? = nil
+        launch: JitAnswer? = nil, request: JitRequestState = .idle
     ) {
         self.debuggerAttached = debuggerAttached
         self.prepared = prepared
         self.guest = guest
         self.lastStart = lastStart
         self.launch = launch
+        self.request = request
+    }
+
+    /// Andarium can ask StikDebug itself: the memory is not prepared for this
+    /// guest and no request is waiting.
+    var canRequest: Bool {
+        if let prepared, prepared == guest { return false }
+        if case .waiting = request { return false }
+        return true
     }
 
     /// The next start can use the JIT when it is on: the memory is prepared
@@ -208,7 +232,27 @@ struct JitStatus: Equatable, Sendable {
         localized: "Preparing JIT", table: "JIT",
         comment: "The detail of the system step on the boot screen while StikDebug prepares JIT. JIT is a name and stays as it is.")
 
+    static let waiting = String(
+        localized: "Waiting for StikDebug. When it says JIT is enabled, come back to Andarium.", table: "JIT",
+        comment: "Under the JIT switch on Home: Andarium asked StikDebug to attach and waits for it. JIT and StikDebug are names and stay as they are.")
+    static let notSent = String(
+        localized: "StikDebug did not open. Install StikDebug, or open Andarium from it.", table: "JIT",
+        comment: "Under the JIT switch on Home: iOS found no app for StikDebug's link. JIT and StikDebug are names and stay as they are.")
+    static let timedOut = String(
+        localized: "StikDebug did not connect in time. Check that its VPN is on, then try again.", table: "JIT",
+        comment: "Under the JIT switch on Home: StikDebug was asked but never attached. JIT and StikDebug are names and stay as they are.")
+    /// The button under the JIT switch that asks StikDebug from Andarium.
+    static let enableButton = String(
+        localized: "Enable JIT with StikDebug", table: "JIT",
+        comment: "Button on Home that asks StikDebug to enable JIT for Andarium. JIT and StikDebug are names and stay as they are.")
+
     var footer: String {
+        switch request {
+        case .waiting: return Self.waiting
+        case .notSent: return Self.notSent
+        case .timedOut: return Self.timedOut
+        case .idle: break
+        }
         if let sentence = lastStart?.fallbackSentence { return sentence }
         if prepared != nil, prepared != guest { return Self.changed }
         return usable ? Self.ready : Self.needsStikDebug

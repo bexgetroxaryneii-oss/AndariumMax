@@ -287,12 +287,81 @@ final class AppModel {
     /// it runs waits for.
     @ObservationIgnored private var jitLaunchWork: Task<Void, Never>?
     @ObservationIgnored private var jitLaunchAsked = false
+    /// Where a request to StikDebug made from Andarium stands
+    /// (`requestJitFromStikDebug`).
+    var jitRequest: JitRequestState = .idle
     /// What Home says under the JIT row.
     var jitStatus: JitStatus {
         JitStatus(
             debuggerAttached: jitDebuggerAttached, prepared: jitPrepared,
             guest: guest.map { JitShape(memoryMiB: $0.memoryMiB, processorCount: $0.cores) },
-            lastStart: jitLastStart, launch: jitLaunch)
+            lastStart: jitLastStart, launch: jitLaunch, request: jitRequest)
+    }
+    /// How long a request to StikDebug waits for its debugger to attach. The
+    /// person switches to StikDebug and back meanwhile; StikDebug's script
+    /// waits about a minute for the request before the system ends it.
+    static let jitAttachBound: Duration = .seconds(60)
+    /// Turns the JIT on and asks StikDebug to attach to this process, then
+    /// prepares the executable memory for the guest once it has: the JIT
+    /// without opening Andarium from StikDebug. One request runs at a time,
+    /// a start that comes meanwhile waits for it, and every outcome leaves
+    /// the guest able to start on gadgets.
+    func requestJitFromStikDebug() {
+        guard jitAvailable, let driver, let guest else { return }
+        if case .waiting = jitRequest { return }
+        let shape = JitShape(memoryMiB: guest.memoryMiB, processorCount: guest.cores)
+        jitOn = true
+        refreshJit()
+        if jitPrepared == shape { return }
+        jitRequest = .waiting
+        jitLaunch = nil
+        jitLaunchWork = Task { [weak self] in
+            let attached: Bool
+            if driver.jitDebuggerAttached() {
+                attached = true
+            } else if await driver.requestJitDebugger() {
+                attached = await Self.waitForDebugger(driver, bound: Self.jitAttachBound)
+            } else {
+                self?.jitRequest = .notSent
+                print("Andarium: StikDebug did not take the JIT request")
+                return
+            }
+            guard let self else { return }
+            guard attached else {
+                jitRequest = .timedOut
+                refreshJit()
+                print("Andarium: StikDebug did not attach within \(Self.jitAttachBound)")
+                return
+            }
+            let answer = await driver.prepareJit(wanted: true, shape: shape)
+            jitRequest = .idle
+            jitLaunchEnded(answer, shape: shape)
+        }
+    }
+    @ObservationIgnored private var jitOpenAsked = false
+    /// Once per process, when Home first shows: a person who keeps the JIT
+    /// on and opened Andarium normally gets the request to StikDebug made for
+    /// them. A launch that decided the JIT (automation) is left alone, and so
+    /// is one a debugger already serves.
+    func requestJitAtOpenIfWanted() async {
+        guard !jitOpenAsked else { return }
+        jitOpenAsked = true
+        await waitForJitLaunch()
+        refreshJit()
+        guard jitAvailable, jitOn, !jitDecidedByLaunch, !jitDebuggerAttached, jitPrepared == nil
+        else { return }
+        requestJitFromStikDebug()
+    }
+    /// Polls for an attached debugger until `bound`. A suspended process
+    /// (the person is in StikDebug) checks again when it comes back, so the
+    /// deadline is read only after a check.
+    private static func waitForDebugger(_ driver: any RuntimeDriver, bound: Duration) async -> Bool {
+        let deadline = ContinuousClock.now + bound
+        while true {
+            if driver.jitDebuggerAttached() { return true }
+            if ContinuousClock.now >= deadline { return false }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
     }
     /// Asks the debugger attached to Andarium for what the JIT row says now,
     /// once per process, as the application opens: StikDebug spins while it

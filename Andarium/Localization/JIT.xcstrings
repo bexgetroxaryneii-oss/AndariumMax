@@ -1,6 +1,29 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Enable JIT with StikDebug" : {
+      "comment" : "Button on Home that asks StikDebug to enable JIT for Andarium. JIT and StikDebug are names and stay as they are.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "StikDebugでJITを有効にする"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用StikDebug启用JIT"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用StikDebug啟用JIT"
+          }
+        }
+      }
+    },
     "Preparing JIT" : {
       "comment" : "The detail of the system step on the boot screen while StikDebug prepares JIT. JIT is a name and stays as it is.",
       "localizations" : {
@@ -139,6 +162,52 @@
         }
       }
     },
+    "StikDebug did not connect in time. Check that its VPN is on, then try again." : {
+      "comment" : "Under the JIT switch on Home: StikDebug was asked but never attached. JIT and StikDebug are names and stay as they are.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "StikDebugが時間内に接続しませんでした。VPNがオンになっているか確認して、もう一度お試しください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "StikDebug未能及时连接。请确认它的VPN已打开，然后再试一次。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "StikDebug未能及時連線。請確認它的VPN已開啟，然後再試一次。"
+          }
+        }
+      }
+    },
+    "StikDebug did not open. Install StikDebug, or open Andarium from it." : {
+      "comment" : "Under the JIT switch on Home: iOS found no app for StikDebug's link. JIT and StikDebug are names and stay as they are.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "StikDebugが開きませんでした。StikDebugをインストールするか、StikDebugからAndariumを開いてください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "StikDebug未能打开。请安装StikDebug，或从StikDebug打开Andarium。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "StikDebug未能開啟。請安裝StikDebug，或從StikDebug開啟Andarium。"
+          }
+        }
+      }
+    },
     "The CPU or memory changed after JIT was prepared. Open Andarium from StikDebug again to use it." : {
       "comment" : "Under the JIT switch on Home: the virtual machine's CPU or memory no longer matches what StikDebug prepared. JIT and StikDebug are names and stay as they are.",
       "localizations" : {
@@ -181,6 +250,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "要使用JIT，請從StikDebug打開Andarium。"
+          }
+        }
+      }
+    },
+    "Waiting for StikDebug. When it says JIT is enabled, come back to Andarium." : {
+      "comment" : "Under the JIT switch on Home: Andarium asked StikDebug to attach and waits for it. JIT and StikDebug are names and stay as they are.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "StikDebugを待っています。JITが有効になったら、Andariumに戻ってください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待StikDebug。它显示JIT已启用后，请回到Andarium。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待StikDebug。它顯示JIT已啟用後，請回到Andarium。"
           }
         }
       }

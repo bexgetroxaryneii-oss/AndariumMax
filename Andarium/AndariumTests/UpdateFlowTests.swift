@@ -104,6 +104,16 @@ final class StubDriver: RuntimeDriver {
         heldJit?.resume()
         heldJit = nil
     }
+    /// What StikDebug does with Andarium's request: nil when no app takes
+    /// the link, else whether its debugger attaches.
+    var stikDebugAttaches: Bool?
+    private(set) var stikDebugAsked = 0
+    func requestJitDebugger() async -> Bool {
+        stikDebugAsked += 1
+        guard let attaches = stikDebugAttaches else { return false }
+        if attaches { debuggerAttached = true }
+        return true
+    }
 
     /// What the refusal-count readings answer, in turn, the last one
     /// repeating; nothing until a test scripts them.

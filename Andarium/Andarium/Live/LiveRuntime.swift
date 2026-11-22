@@ -563,6 +563,10 @@ final class LiveRuntime: RuntimeDriver {
     func prepareJit(wanted: Bool, shape: JitShape) async -> JitAnswer {
         await JitDebugger.prepare(wanted: wanted, shape: shape, flavor: Self.androidFlavor)
     }
+
+    func requestJitDebugger() async -> Bool {
+        await StikDebugLink.open()
+    }
     #endif
 
     private func preparingDisk(_ fraction: Double) {

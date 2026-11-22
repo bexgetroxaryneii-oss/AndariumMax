@@ -275,10 +275,17 @@ protocol RuntimeDriver: AnyObject, OldAppsSource {
     /// out. It takes the seconds the debugger takes and never blocks the main
     /// thread. Without a servicing debugger it asks the runtime nothing.
     func prepareJit(wanted: Bool, shape: JitShape) async -> JitAnswer
+    /// Asks StikDebug to attach to this process (`StikDebugLink`); false when
+    /// no app took the request.
+    func requestJitDebugger() async -> Bool
     #endif
 }
 
 extension RuntimeDriver {
+    #if !APP_STORE
+    /// A driver with no device to hand a URL to asks nobody.
+    func requestJitDebugger() async -> Bool { false }
+    #endif
     /// A driver with no image to ask lists no old app: the feature is not offered.
     func listOldApps(limit: Duration?) async -> OldAppListing { .unavailable }
     func setOldApp(_ package: String, on: Bool) async -> OldAppWrite { .failed }
