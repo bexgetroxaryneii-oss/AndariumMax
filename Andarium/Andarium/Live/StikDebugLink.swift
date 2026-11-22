@@ -19,7 +19,7 @@ import UIKit
 /// (`JitDebugger.attached`).
 enum StikDebugLink {
     /// The StikDebug script that serves the runtime's requests.
-    static let script = "universal.js"
+    nonisolated static let script = "universal.js"
 
     /// The URL that asks StikDebug to attach to `pid` of `bundleID`.
     nonisolated static func url(bundleID: String, pid: Int32) -> URL? {
