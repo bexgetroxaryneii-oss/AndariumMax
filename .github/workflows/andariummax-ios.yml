@@ -1,0 +1,179 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# AndariumMax cloud build: compiles Andarium on a GitHub-hosted Apple silicon
+# runner with Xcode 27 and uploads an unsigned IPA for SideStore.
+# Steps live in fork/ci/*.sh so the same commands run on any Mac.
+# fork/CLOUD_BUILD.md explains the inputs, the caches and the limits.
+
+name: AndariumMax iOS build
+
+on:
+  workflow_dispatch:
+    inputs:
+      system_release_tag:
+        description: >-
+          Release tag in THIS repository whose assets hold the Android system
+          (andarium-system*.zip = a staged folder; android-release* = a release
+          directory). Empty = compile-check IPA without Android.
+        required: false
+        default: ""
+      system_mode:
+        description: How to read that asset
+        type: choice
+        options: [auto, staged, release]
+        default: auto
+
+permissions:
+  contents: read
+
+concurrency:
+  group: andariummax-ios-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+
+jobs:
+  dependencies:
+    name: 1 · Dependency prefixes
+    runs-on: xcode-27
+    timeout-minutes: 345
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore dependency prefixes
+        id: deps-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .build/dependencies/ios-device-arm64
+            .build/dependencies/apple-gpu-vulkan-experiment/ios-device-arm64
+            .build/dependencies/kernel-host-tools
+          key: deps-ios-device-${{ runner.arch }}-${{ hashFiles('dependencies/**') }}
+
+      - name: Build or verify dependency prefixes
+        run: fork/ci/build-dependencies.sh
+
+      - name: Save dependency prefixes
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .build/dependencies/ios-device-arm64
+            .build/dependencies/apple-gpu-vulkan-experiment/ios-device-arm64
+            .build/dependencies/kernel-host-tools
+          key: ${{ steps.deps-cache.outputs.cache-primary-key }}
+
+  kernel:
+    name: 2 · Android kernel bundle
+    needs: dependencies
+    runs-on: xcode-27
+    timeout-minutes: 345
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore kernel host tools
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .build/dependencies/ios-device-arm64
+            .build/dependencies/apple-gpu-vulkan-experiment/ios-device-arm64
+            .build/dependencies/kernel-host-tools
+          key: deps-ios-device-${{ runner.arch }}-${{ hashFiles('dependencies/**') }}
+          fail-on-cache-miss: true
+
+      - name: Restore kernel bundle
+        id: kernel-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .build/kernel/artifacts
+          key: kernel-android-${{ hashFiles('kernel/**') }}
+
+      - name: Build and publish the Android kernel
+        if: steps.kernel-cache.outputs.cache-hit != 'true'
+        run: fork/ci/build-android-kernel.sh
+
+      - name: Save kernel bundle
+        if: steps.kernel-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .build/kernel/artifacts
+          key: ${{ steps.kernel-cache.outputs.cache-primary-key }}
+
+  app:
+    name: 3 · Andarium IPA
+    needs: kernel
+    runs-on: xcode-27
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore dependency prefixes
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .build/dependencies/ios-device-arm64
+            .build/dependencies/apple-gpu-vulkan-experiment/ios-device-arm64
+            .build/dependencies/kernel-host-tools
+          key: deps-ios-device-${{ runner.arch }}-${{ hashFiles('dependencies/**') }}
+          fail-on-cache-miss: true
+
+      - name: Restore kernel bundle
+        uses: actions/cache/restore@v4
+        with:
+          path: .build/kernel/artifacts
+          key: kernel-android-${{ hashFiles('kernel/**') }}
+          fail-on-cache-miss: true
+
+      - name: Fetch the Android system (optional)
+        id: system
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.system_release_tag }}
+          MODE: ${{ inputs.system_mode }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TAG" ]; then
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+            echo "No system_release_tag: building a compile-check IPA."
+            exit 0
+          fi
+          mkdir -p .build/ci/system-download
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --dir .build/ci/system-download --pattern 'andarium-system*' --pattern 'android-release*'
+          file=$(ls .build/ci/system-download/* | head -1)
+          [ -f "$file" ] || { echo "::error::release $TAG has no andarium-system* or android-release* asset"; exit 1; }
+          if [ "$MODE" = auto ]; then
+            case "$(basename "$file")" in
+              andarium-system*) MODE=staged ;;
+              *) MODE=release ;;
+            esac
+          fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "archive=$file" >> "$GITHUB_OUTPUT"
+          ls -lh "$file"
+
+      - name: Build Andarium and wrap the IPA
+        id: build
+        env:
+          SYSTEM_MODE: ${{ steps.system.outputs.mode }}
+          SYSTEM_ARCHIVE: ${{ steps.system.outputs.archive }}
+          IPA_LABEL: ${{ github.ref_name }}-run${{ github.run_number }}
+        run: fork/ci/build-app.sh
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AndariumMax-ipa-run${{ github.run_number }}
+          path: ${{ steps.build.outputs.ipa }}
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-run${{ github.run_number }}
+          path: .build/ci/logs
+          if-no-files-found: ignore
+          retention-days: 14
