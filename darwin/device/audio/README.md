@@ -17,7 +17,9 @@ device's `PeriodClock` owns. The clock is the only time base the device uses,
 so tests inject one and advance it by hand. The Apple output signals the worker
 from AVFAudio callbacks through a bounded completion ring, and the callback path
 does not allocate or lock. iOS owns `AVAudioSession` interruption and route
-recovery inside `ApplePlaybackSink`.
+recovery inside `ApplePlaybackSink`. On Apple platforms the service thread
+runs at the user-interactive QoS class, so busy vCPU threads do not delay the
+completions the guest's short ring waits for.
 
 ## Output cycle
 
