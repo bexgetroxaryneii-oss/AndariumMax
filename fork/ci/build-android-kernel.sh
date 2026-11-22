@@ -76,11 +76,13 @@ ensure_host_tools
 	fail "kernel host tools missing: the dependencies job must run first"
 
 step "Case-sensitive volume for the Linux source"
-VOLUME=/Volumes/uml-kernel
-if [ ! -d "$VOLUME" ]; then
+SCRATCH=${RUNNER_TEMP:-$ROOT_DIR/.build/ci}
+VOLUME=$SCRATCH/uml-kernel-volume
+if [ ! -d "$VOLUME/linux" ] && ! mount | grep -q " on $VOLUME "; then
+	mkdir -p "$VOLUME"
 	hdiutil create -size 40g -type SPARSE -fs 'Case-sensitive APFS' \
-		-volname uml-kernel "$RUNNER_TEMP/uml-kernel.sparseimage" >/dev/null
-	hdiutil attach "$RUNNER_TEMP/uml-kernel.sparseimage" >/dev/null
+		-volname uml-kernel "$SCRATCH/uml-kernel.sparseimage" >/dev/null
+	hdiutil attach -mountpoint "$VOLUME" "$SCRATCH/uml-kernel.sparseimage" >/dev/null
 fi
 printf 'UML_KERNEL_SOURCE_DIR=%s/linux\n' "$VOLUME" \
 	>kernel/mainline-6.18/source-location.conf
