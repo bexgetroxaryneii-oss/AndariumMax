@@ -51,7 +51,7 @@ ensure_host_tools()
 {
 	export HOMEBREW_NO_INSTALL_CLEANUP=1 HOMEBREW_NO_ENV_HINTS=1
 	local wanted=(cmake ninja meson pkgconf autoconf automake gettext libtool
-		gperf groff make rsync coreutils llvm lld zstd erofs-utils)
+		gperf groff make rsync coreutils llvm lld zstd lz4)
 	wanted+=("python@3.12")
 	local missing=()
 	local formula

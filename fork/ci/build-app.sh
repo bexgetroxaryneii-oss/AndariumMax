@@ -65,6 +65,66 @@ extract()
 	esac
 }
 
+sdk_at_least()
+{
+	# sdk_at_least VERSION: the selected iOS SDK is VERSION or newer.
+	python3 -c 'import sys; v = lambda s: [int(p) for p in s.split(".")]; sys.exit(0 if v(sys.argv[2]) >= v(sys.argv[1]) else 1)' \
+		"$1" "$(xcrun --sdk iphoneos --show-sdk-version)"
+}
+
+step "Xcode"
+ls -d /Applications/Xcode*.app 2>/dev/null | sed 's/^/[andariummax-ci] installed: /'
+# The app uses API of the iOS 27.2 SDK; take the newest Xcode when the
+# default is older.
+if ! sdk_at_least 27.2; then
+	newest=""
+	best="0"
+	for app in /Applications/Xcode*.app; do
+		sdk=$(DEVELOPER_DIR="$app/Contents/Developer" xcrun --sdk iphoneos --show-sdk-version 2>/dev/null) || continue
+		note "$app: iOS SDK $sdk"
+		if python3 -c 'import sys; v = lambda s: [int(p) for p in s.split(".")]; sys.exit(0 if v(sys.argv[1]) > v(sys.argv[2]) else 1)' "$sdk" "$best"; then
+			best=$sdk
+			newest=$app
+		fi
+	done
+	if [ -n "$newest" ]; then
+		export DEVELOPER_DIR="$newest/Contents/Developer"
+		note "selected $newest"
+	fi
+fi
+note "iOS SDK $(xcrun --sdk iphoneos --show-sdk-version) ($(xcodebuild -version | head -1))"
+
+erofs_with_zstd()
+{
+	# The AOT build reads the release's system partition, which is
+	# Zstandard-compressed; Homebrew's erofs-utils has no zstd
+	# (tools/aot/README.md). Build one with it, once per runner.
+	local tool=$ROOT_DIR/.build/ci-tools/erofs/bin/fsck.erofs
+	if [ ! -x "$tool" ]; then
+		local work=$ROOT_DIR/.build/ci-tools/erofs-src
+		rm -rf "$work"
+		git clone -q --depth 1 --branch v1.9.4 \
+			https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git "$work" >&2 || return 1
+		(
+			cd "$work" &&
+			./autogen.sh &&
+			PKG_CONFIG_PATH="$(brew --prefix zstd)/lib/pkgconfig:$(brew --prefix lz4)/lib/pkgconfig" \
+				./configure --prefix="$ROOT_DIR/.build/ci-tools/erofs" \
+				--with-libzstd --disable-fuse --without-uuid --without-selinux &&
+			make -j "$JOBS" &&
+			make install
+		) >"$LOGS/erofs-utils-build.log" 2>&1 || {
+			tail -30 "$LOGS/erofs-utils-build.log" >&2
+			return 1
+		}
+	fi
+	if ! "$tool" --help 2>&1 | grep -qi zstd; then
+		printf 'fsck.erofs at %s lists no zstd\n' "$tool" >&2
+		return 1
+	fi
+	printf '%s\n' "$tool"
+}
+
 step "Host tools"
 ensure_host_tools
 ensure_metal_toolchain
@@ -136,7 +196,7 @@ du -sh .build/andarium-system | sed 's/^/[andariummax-ci] system: /'
 step "Ahead-of-time code from the installed release"
 if [ "$BUILD_AOT" = 1 ] && [ -d .build/android/releases ]; then
 	installed=$(find .build/android/releases -mindepth 1 -maxdepth 1 -type d | head -1)
-	FSCK_EROFS=$(command -v fsck.erofs || true)
+	FSCK_EROFS=$(erofs_with_zstd || true)
 	if [ -n "$installed" ] && [ -n "$FSCK_EROFS" ]; then
 		AOT_DIR=$OUT/aot-artifact
 		rm -rf "$AOT_DIR"
@@ -169,6 +229,21 @@ disk_report
 
 step "Package the iOS frameworks (Android runtime only)"
 logged package-frameworks Kernarium/scripts/package-ios-frameworks.sh --runtimes android
+
+if ! sdk_at_least 27.2; then
+	# iOS 27.2 states a motion permission; an older SDK has no such API, and a
+	# device on an older iOS never reaches that branch. Runner checkout only.
+	printf '::warning::iOS SDK older than 27.2: the motion-permission read is compiled out of this build\n'
+	python3 - <<'PY'
+from pathlib import Path
+p = Path("Andarium/Andarium/Live/MotionSensors.swift")
+s = p.read_text()
+old = "if #available(iOS 27.2, *) { return CMMotionManager.authorizationStatus }"
+if old not in s:
+    raise SystemExit("MotionSensors.swift changed: update fork/ci/build-app.sh")
+p.write_text(s.replace(old, "// iOS 27.2 SDK missing on the build host"))
+PY
+fi
 
 step "Archive Andarium (Release, unsigned)"
 ARCHIVE=$OUT/Andarium.xcarchive
