@@ -134,8 +134,10 @@ step "Kernel bundle and descriptor"
 "$CI_DIR/build-android-kernel.sh"
 
 step "Sources the framework packaging builds (GPT fdisk, zstd)"
-dependencies/prepare.sh --product ios-storage
-dependencies/prepare.sh --product ios-compression
+for product in ios-storage ios-compression; do
+	dependencies/prepare.sh --product "$product" ||
+		{ note "retrying $product in 60 s"; sleep 60; dependencies/prepare.sh --product "$product"; }
+done
 
 step "Android system ($SYSTEM_MODE)"
 rm -rf .build/andarium-system

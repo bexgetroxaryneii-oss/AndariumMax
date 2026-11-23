@@ -19,8 +19,16 @@ disk_report
 
 prepare()
 {
+	# Upstream Git hosts (savannah, freedesktop) drop connections now and then.
 	step "Prepare sources: $*"
-	dependencies/prepare.sh "$@"
+	local attempt
+	for attempt in 1 2 3; do
+		dependencies/prepare.sh "$@" && return 0
+		[ "$attempt" = 3 ] && break
+		note "prepare.sh $* failed (attempt $attempt); retrying in 60 s"
+		sleep 60
+	done
+	fail "prepare.sh $* failed three times"
 }
 
 prepare --product ios-network
