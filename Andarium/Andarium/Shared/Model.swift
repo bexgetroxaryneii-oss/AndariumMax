@@ -3,6 +3,7 @@
 import AndariumCore
 import Observation
 import SwiftUI
+import UIKit
 
 /// A view that shows the guest's statistics.
 enum StatisticsViewer: Hashable {
@@ -177,8 +178,13 @@ final class AppModel {
     /// none goes to the nearest).
     var resolution: GuestDisplayScale {
         let choices = resolutionChoices
-        return launchScale.map(choices.resolve)
-            ?? displayOptions.scale(memoryLimitBytes: memoryLimitBytes, choices: choices)
+        if let launchScale { return choices.resolve(launchScale) }
+        // Performance mode on a phone, with no choice made: 1.5, so the GPU
+        // path and the composition draw about half the pixels of 2.0.
+        if chosenScale == nil, performanceMode, UIDevice.current.userInterfaceIdiom == .phone {
+            return choices.resolve(.factor(ResolutionChoices.lowMemoryDefault))
+        }
+        return displayOptions.scale(memoryLimitBytes: memoryLimitBytes, choices: choices)
     }
     /// The guest's display as the next start lays it out at the choice at
     /// `index` of `resolutionChoices`; nil until the display's size is known.
@@ -206,6 +212,14 @@ final class AppModel {
     func displayPointsDidChange(_ points: CGSize) {
         let points = statedDisplayPoints ?? points
         if displayPoints != points { displayPoints = points }
+    }
+    /// The defaults key of `performanceMode`.
+    static let performanceModeKey = "andariummax.performanceMode"
+    /// Performance mode: Android's animations at half length and, on a phone
+    /// whose resolution nobody chose, the lighter 1.5 resolution. On until
+    /// the person turns it off; the animations follow at the next boot.
+    var performanceMode: Bool = UserDefaults.standard.object(forKey: AppModel.performanceModeKey) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(performanceMode, forKey: Self.performanceModeKey) }
     }
     /// The defaults key of `fullScreen`.
     static let fullScreenKey = "andariummax.fullScreen"

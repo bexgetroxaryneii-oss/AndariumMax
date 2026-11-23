@@ -839,6 +839,28 @@ final class LiveRuntime: RuntimeDriver {
         }
     }
 
+    // MARK: Performance mode
+
+    /// Android's three animation scales: half length in performance mode,
+    /// Android's own 1 otherwise. Sent once Android has booted; a guest that
+    /// booted without the application's adb key is not asked.
+    private func applyPerformanceMode() {
+        guard normalRun, adbIdentity != nil, let model else { return }
+        let scale = model.performanceMode ? "0.5" : "1"
+        let command = ["window_animation_scale", "transition_animation_scale", "animator_duration_scale"]
+            .map { "settings put global \($0) \(scale)" }
+            .joined(separator: " && ")
+        let shell = AdbGuestShell(operations: operations)
+        Task {
+            do {
+                let output = try await shell.run(command, limit: .seconds(30))
+                print("Andarium: performance mode \(scale == "0.5" ? "on" : "off"), animations \(scale)x (exit \(output.exitCode.map(String.init) ?? "?"))")
+            } catch {
+                print("Andarium: performance mode not applied: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: Android operations
 
     /// What adb does for the screens, with the key this boot carries.
@@ -1008,6 +1030,7 @@ final class LiveRuntime: RuntimeDriver {
             updateThermal()
             updateGuestRotation()
             updateSpaceWatch()
+            applyPerformanceMode()
             // An update counts as applied once its start has booted, whatever
             // happens to the application after that.
             do { try storage.bootCompleted() } catch { print("Andarium: the guest's record was not updated: \(error.localizedDescription)") }

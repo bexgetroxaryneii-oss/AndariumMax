@@ -434,8 +434,12 @@ struct SessionSettingsSheet: View {
                 rowLabel("Full screen", symbol: "arrow.up.left.and.arrow.down.right")
             }
             .accessibilityIdentifier("fullScreen")
+            Toggle(isOn: Binding(get: { model.performanceMode }, set: { model.performanceMode = $0 })) {
+                rowLabel("Performance mode", symbol: "hare.fill")
+            }
+            .accessibilityIdentifier("performanceMode")
         } footer: {
-            Text("Uses the whole screen, around the camera and the home bar. Android may draw under the camera.")
+            Text("Full screen uses the area around the camera and the home bar. Performance mode halves Android's animations and draws at a lighter resolution unless you chose one. Both apply at the next start.")
         }
     }
 

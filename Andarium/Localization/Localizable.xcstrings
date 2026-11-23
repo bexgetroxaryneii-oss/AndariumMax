@@ -4973,6 +4973,28 @@
         }
       }
     },
+    "Full screen uses the area around the camera and the home bar. Performance mode halves Android's animations and draws at a lighter resolution unless you chose one. Both apply at the next start." : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フルスクリーンはカメラとホームバーの周りも使います。パフォーマンスモードはAndroidのアニメーションを半分の長さにし、解像度を選んでいない場合は軽い解像度で描画します。どちらも次回の起動から適用されます。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全屏会使用相机和主屏幕指示条周围的区域。性能模式会将Android动画缩短一半，并在你未选择分辨率时使用较轻的分辨率。两者都在下次启动时生效。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全螢幕會使用相機和主畫面指示條周圍的區域。效能模式會將Android動畫縮短一半，並在你未選擇解析度時使用較輕的解析度。兩者都在下次啟動時生效。"
+          }
+        }
+      }
+    },
     "Getting the file…" : {
       "localizations" : {
         "ja" : {
@@ -7355,6 +7377,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "效能"
+          }
+        }
+      }
+    },
+    "Performance mode" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パフォーマンスモード"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "性能模式"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "效能模式"
           }
         }
       }
@@ -12531,28 +12575,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "將指標用作觸控"
-          }
-        }
-      }
-    },
-    "Uses the whole screen, around the camera and the home bar. Android may draw under the camera." : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "カメラとホームバーの周りを含め、画面全体を使います。Androidがカメラの下に描画することがあります。"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用整个屏幕，包括相机和主屏幕指示条周围。Android可能会在相机下方绘制内容。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用整個螢幕，包括相機和主畫面指示條周圍。Android可能會在相機下方繪製內容。"
           }
         }
       }
