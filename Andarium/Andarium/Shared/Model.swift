@@ -179,11 +179,6 @@ final class AppModel {
     var resolution: GuestDisplayScale {
         let choices = resolutionChoices
         if let launchScale { return choices.resolve(launchScale) }
-        // Performance mode on a phone, with no choice made: 1.5, so the GPU
-        // path and the composition draw about half the pixels of 2.0.
-        if chosenScale == nil, performanceMode, UIDevice.current.userInterfaceIdiom == .phone {
-            return choices.resolve(.factor(ResolutionChoices.lowMemoryDefault))
-        }
         return displayOptions.scale(memoryLimitBytes: memoryLimitBytes, choices: choices)
     }
     /// The guest's display as the next start lays it out at the choice at

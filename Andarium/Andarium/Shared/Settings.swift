@@ -439,7 +439,7 @@ struct SessionSettingsSheet: View {
             }
             .accessibilityIdentifier("performanceMode")
         } footer: {
-            Text("Full screen uses the area around the camera and the home bar. Performance mode halves Android's animations and draws at a lighter resolution unless you chose one. Both apply at the next start.")
+            Text("Full screen uses the area around the camera and the home bar. Performance mode halves Android's animations. Both apply at the next start.")
         }
     }
 

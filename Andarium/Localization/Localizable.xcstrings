@@ -4973,24 +4973,24 @@
         }
       }
     },
-    "Full screen uses the area around the camera and the home bar. Performance mode halves Android's animations and draws at a lighter resolution unless you chose one. Both apply at the next start." : {
+    "Full screen uses the area around the camera and the home bar. Performance mode halves Android's animations. Both apply at the next start." : {
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "フルスクリーンはカメラとホームバーの周りも使います。パフォーマンスモードはAndroidのアニメーションを半分の長さにし、解像度を選んでいない場合は軽い解像度で描画します。どちらも次回の起動から適用されます。"
+            "value" : "フルスクリーンはカメラとホームバーの周りも使います。パフォーマンスモードはAndroidのアニメーションを半分の長さにします。どちらも次回の起動から適用されます。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "全屏会使用相机和主屏幕指示条周围的区域。性能模式会将Android动画缩短一半，并在你未选择分辨率时使用较轻的分辨率。两者都在下次启动时生效。"
+            "value" : "全屏会使用相机和主屏幕指示条周围的区域。性能模式会将Android动画缩短一半。两者都在下次启动时生效。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "全螢幕會使用相機和主畫面指示條周圍的區域。效能模式會將Android動畫縮短一半，並在你未選擇解析度時使用較輕的解析度。兩者都在下次啟動時生效。"
+            "value" : "全螢幕會使用相機和主畫面指示條周圍的區域。效能模式會將Android動畫縮短一半。兩者都在下次啟動時生效。"
           }
         }
       }
