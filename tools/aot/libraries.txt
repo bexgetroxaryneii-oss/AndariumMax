@@ -58,4 +58,37 @@ library /system/lib64/liblz4.so
 library /apex/com.android.media.swcodec/lib64/libvpx.so
 library /apex/com.android.media.swcodec/lib64/libcodec2_soft_avcdec.so
 
+# The audio, input and graphics-entry paths a game runs every frame: the
+# client and server sides of AudioTrack, AAudio and OpenSL ES, audioserver's
+# mixer and resampler, input dispatch and the EGL and Vulkan entry layers.
+library /system/lib64/libaudioclient.so
+library /system/lib64/libaudioprocessing.so
+library /system/lib64/libaudio-resampler.so
+library /system/lib64/libaudioutils.so
+library /system/lib64/libaudioflinger_fastpath.so
+library /system/lib64/libaudioflinger_datapath.so
+library /system/lib64/libaudioflinger_timing.so
+library /system/lib64/libaudioflinger_utils.so
+library /system/lib64/libnbaio.so
+library /system/lib64/libaaudio.so
+library /system/lib64/libaaudio_internal_core.so
+library /system/lib64/libaaudio_internal_legacy.so
+library /system/lib64/libaaudio_internal_fifo.so
+library /system/lib64/libaaudio_internal_mmap.so
+library /system/lib64/libaaudio_internal_utils.so
+library /system/lib64/libOpenSLES.so
+library /system/lib64/libwilhelm.so
+library /system/lib64/libsonic.so
+library /system/bin/audioserver
+library /system/lib64/libtinyalsa.so
+library /system/lib64/libinput.so
+library /system/lib64/libinputflinger.so
+library /system/lib64/libvulkan.so
+library /system/lib64/libnativewindow.so
+library /system/lib64/libandroid.so
+library /system/lib64/libEGL.so
+library /system/lib64/libGLESv2.so
+library /vendor/lib64/egl/libEGL_kernarium.so
+library /vendor/lib64/egl/libGLESv2_kernarium.so
+
 boot /system/framework/arm64/boot*.oat

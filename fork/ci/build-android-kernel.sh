@@ -11,7 +11,8 @@
 # that depend on the replay (the "release" string carries the replay commit's
 # abbreviated ID) can differ from upstream's; when they do, this script
 # rewrites the descriptor in the runner's checkout only, from the bundle's own
-# manifest, and says so. That is allowed for the Release (development)
+# manifest, and says so. The fork's own kernel topics change the final tree;
+# that is accepted when the tree is the one this commit's series produce. That is allowed for the Release (development)
 # configuration, which is what the cloud build archives. The AppStore and
 # TestFlight configurations would refuse it, by design.
 
@@ -51,8 +52,18 @@ if not diff:
     sys.exit(0)
 for k, (old, new) in diff.items():
     print(f"::warning::kernel descriptor {k}: upstream {old!r}, cloud bundle {new!r}")
-if "FINAL_TREE" in diff or "ABI_VERSION" in diff or "ABI_FINGERPRINT" in diff:
-    sys.exit("the rebuilt kernel's source tree or bridge ABI differs from the accepted one: stop")
+# A tree other than the accepted one is allowed only when it is the tree this
+# commit's series produce (kernel/mainline-6.18/patches/metadata.env): the
+# fork's own kernel change, pending upstream acceptance. The bridge ABI must
+# match, since the runtime is built against it.
+series_tree = None
+for line in Path("kernel/mainline-6.18/patches/metadata.env").read_text().splitlines():
+    if line.startswith("UML_KERNEL_FINAL_TREE="):
+        series_tree = line.split("=", 1)[1].strip("'")
+if "FINAL_TREE" in diff and m["source"]["final_tree"] != series_tree:
+    sys.exit("the rebuilt kernel's source tree is neither the accepted one nor this commit's series: stop")
+if "ABI_VERSION" in diff or "ABI_FINGERPRINT" in diff:
+    sys.exit("the rebuilt kernel's bridge ABI differs from the accepted one: stop")
 lines = ["# SPDX-License-Identifier: GPL-2.0-or-later",
          "# Rewritten by fork/ci/build-android-kernel.sh in the runner only."]
 for k, v in want.items():

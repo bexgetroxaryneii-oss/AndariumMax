@@ -879,3 +879,10 @@ the AArch64 gadget parts byte-identical.
 | Attempt | Disposition and lesson |
 | --- | --- |
 | Run the Virtio Sound service thread at the user-interactive QoS class | Built, not measured. The primary HAL's ALSA ring is 1024 frames (four 5 ms periods, about 21 ms), and every period the guest refills waits for a completion from the service thread, which had no QoS of its own while vCPU threads can fill every core. A game that renders at a high frame rate and crackles is the case to compare: count the guest's underruns (`dumpsys media.audio_flinger`) and listen, on the base and on this build. The ring itself is a release input; a larger one is the next candidate if completions on time do not cure it. |
+
+## Performance fork: game code under the engine
+
+| Attempt | Disposition and lesson |
+| --- | --- |
+| Rewrite the audio, input and EGL/Vulkan entry libraries a game runs every frame (29 more units, about 60 MB of blob) | Built, not measured. A Clone Hero session held 2.3 to 3.8 vCPUs in the game process while the HAL consumed at rate 1.00001, so the slowdown was engine throughput, not the audio path; the AOT set was chosen from boot, Settings and benchmark samples, none of which play audio. Measure a game's frame and audio-thread time on the base and on this build; a library no game run enters costs only blob bytes. |
+| Let the kernel's immutable fact cover fs-verity files | Built, not measured. Android enables fs-verity on every installed APK, so the pages of a native library mapped from its APK can never change once mapped, exactly like an EROFS page; the fact lets rewritten code and shared verdicts reach application libraries once a blob covers them. Without such a blob it changes nothing. |

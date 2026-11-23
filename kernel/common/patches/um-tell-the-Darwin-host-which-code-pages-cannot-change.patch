@@ -11,8 +11,11 @@ A verdict may be shared only for a page that nothing can change while a
 mapping of it exists, and only the guest kernel knows that.
 update_pte_range now decides it from the PTE it read under the
 page-table lock: the page is an up-to-date page-cache page of a file on
-EROFS, which is read-only, and a write through a private mapping copies
-the page first and leaves that mapping on an anonymous page. The answer
+EROFS, which is read-only, or of an fs-verity file, which can never be
+opened for writing again once verity is on (Android enables it on every
+installed APK, so the native libraries an application maps from its APK
+qualify), and a write through a private mapping copies the page first and
+leaves that mapping on an anonymous page. The answer
 travels with the guest-code and executable bits as
 UM_PROT_GUEST_IMMUTABLE, and map() turns it into bit 1 of the
 guest_code argument. It never reaches the host protection.
@@ -28,11 +31,11 @@ the fingerprint is unchanged. A host that ignores the bit stays correct.
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
  arch/arm64/um/user-offsets.c                |   2 +
- arch/um/kernel/tlb.c                        | 108 ++++++++++++++++----
+ arch/um/kernel/tlb.c                        | 112 ++++++++++++++++----
  arch/um/os-Darwin/skas/mem.c                |   8 +-
  arch/um/os-Darwin/uml_darwin_abi_identity.h |   2 +-
  arch/um/os-Darwin/uml_darwin_memory.h       |   6 ++
- 5 files changed, 102 insertions(+), 24 deletions(-)
+ 5 files changed, 106 insertions(+), 24 deletions(-)
 
 diff --git a/arch/arm64/um/user-offsets.c b/arch/arm64/um/user-offsets.c
 index fad1abac06375c29246c39c7e0d22b714a0a38ee..8d650259a53c4ac2976c7a0c9b5fac2330e8a304 100644
@@ -46,7 +49,7 @@ index fad1abac06375c29246c39c7e0d22b714a0a38ee..8d650259a53c4ac2976c7a0c9b5fac23
 +	DEFINE(UM_PROT_GUEST_IMMUTABLE, 32);
  }
 diff --git a/arch/um/kernel/tlb.c b/arch/um/kernel/tlb.c
-index 4b3b6019b6650d789f8f339311f3b874e799383c..d0a1b2d9e9680ef987e8635138e76b6ac119e6fc 100644
+index 4b3b6019b6650d789f8f339311f3b874e799383c..73c5592beb8abb4e3c4a3749b7357b350fdb362f 100644
 --- a/arch/um/kernel/tlb.c
 +++ b/arch/um/kernel/tlb.c
 @@ -3,8 +3,11 @@
@@ -90,15 +93,18 @@ index 4b3b6019b6650d789f8f339311f3b874e799383c..d0a1b2d9e9680ef987e8635138e76b6a
  	if (vma->vm_flags & VM_EXEC)
  		protection |= DARWIN_VMA_EXEC;
  	if (vma->vm_flags & VM_WRITE)
-@@ -104,19 +102,86 @@ static unsigned int darwin_vma_protection(struct mm_struct *mm,
+@@ -104,19 +102,90 @@ static unsigned int darwin_vma_protection(struct mm_struct *mm,
  	return protection;
  }
  
 +/*
 + * Whether the page @pteval names cannot change while any mapping of it
-+ * exists: an up-to-date page-cache page of a file on EROFS.  The file system
-+ * is read-only, and a write through a private mapping copies the page first,
-+ * which leaves that mapping on an anonymous page.  The host shares what it
++ * exists: an up-to-date page-cache page of a file on EROFS or of an
++ * fs-verity file.  EROFS is read-only, and an fs-verity file can never be
++ * opened for writing again once verity is enabled (enabling it requires that
++ * no writer exists, and the flag is never cleared); a write through a private
++ * mapping copies the page first, which leaves that mapping on an anonymous
++ * page.  The host shares what it
 + * verified about the bytes of such a page between address spaces and about
 + * no other.  The default is false: kernel mappings, absent or special PTEs,
 + * anonymous pages, any other file system and DAX.
@@ -128,8 +134,9 @@ index 4b3b6019b6650d789f8f339311f3b874e799383c..d0a1b2d9e9680ef987e8635138e76b6a
 +	if (mapping == NULL)
 +		return false;
 +	inode = mapping->host;
-+	return inode != NULL && inode->i_sb->s_magic == EROFS_SUPER_MAGIC_V1 &&
-+	       !IS_DAX(inode);
++	return inode != NULL && !IS_DAX(inode) &&
++	       (inode->i_sb->s_magic == EROFS_SUPER_MAGIC_V1 ||
++		IS_VERITY(inode));
 +}
 +
 +/*
@@ -180,7 +187,7 @@ index 4b3b6019b6650d789f8f339311f3b874e799383c..d0a1b2d9e9680ef987e8635138e76b6a
  	if (vma_protection & DARWIN_VMA_WRITABLE)
  		prot |= UM_PROT_GUEST_WRITABLE;
  	return prot;
-@@ -219,7 +284,7 @@ static int darwin_init_mm_pte_prot(pte_t pteval)
+@@ -219,7 +288,7 @@ static int darwin_init_mm_pte_prot(pte_t pteval)
  	prot = (r ? UM_PROT_READ : 0) |
  	       (w ? UM_PROT_WRITE : 0) |
  	       (x ? UM_PROT_EXEC : 0);
@@ -189,7 +196,7 @@ index 4b3b6019b6650d789f8f339311f3b874e799383c..d0a1b2d9e9680ef987e8635138e76b6a
  }
  
  static int darwin_map_init_mm_pte(struct vm_ops *ops,
-@@ -550,6 +615,8 @@ static inline int update_pte_range(pmd_t *pmd, unsigned long addr,
+@@ -550,6 +619,8 @@ static inline int update_pte_range(pmd_t *pmd, unsigned long addr,
  	do {
  #ifdef UML_HOST_DARWIN
  		pte_t pteval;
@@ -198,7 +205,7 @@ index 4b3b6019b6650d789f8f339311f3b874e799383c..d0a1b2d9e9680ef987e8635138e76b6a
  
  		/*
  		 * UML's original shadow-TLB walker was uniprocessor-only.  Clearing
-@@ -581,6 +648,8 @@ static inline int update_pte_range(pmd_t *pmd, unsigned long addr,
+@@ -581,6 +652,8 @@ static inline int update_pte_range(pmd_t *pmd, unsigned long addr,
  				return -EAGAIN;
  		}
  		pteval = ptep_get(pte);
@@ -207,7 +214,7 @@ index 4b3b6019b6650d789f8f339311f3b874e799383c..d0a1b2d9e9680ef987e8635138e76b6a
  		if (ops->mm == &init_mm)
  			spin_unlock(ptl);
  		else
-@@ -601,10 +670,6 @@ static inline int update_pte_range(pmd_t *pmd, unsigned long addr,
+@@ -601,10 +674,6 @@ static inline int update_pte_range(pmd_t *pmd, unsigned long addr,
  			unsigned long phys = pte_val(pteval) & PAGE_MASK;
  			int fd = phys_mapping(phys, &offset);
  			int r, w, x, prot;
@@ -218,7 +225,7 @@ index 4b3b6019b6650d789f8f339311f3b874e799383c..d0a1b2d9e9680ef987e8635138e76b6a
  
  			r = pte_read(pteval);
  			w = pte_write(pteval);
-@@ -620,7 +685,8 @@ static inline int update_pte_range(pmd_t *pmd, unsigned long addr,
+@@ -620,7 +689,8 @@ static inline int update_pte_range(pmd_t *pmd, unsigned long addr,
  			       (x ? UM_PROT_EXEC : 0);
  #ifdef UML_HOST_DARWIN
  			prot = darwin_guest_protection(ops->mm, prot, x,
