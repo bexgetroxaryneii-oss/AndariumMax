@@ -55,7 +55,8 @@ jobs:
             .build/dependencies/kernel-host-tools
           key: deps-ios-device-${{ runner.arch }}-${{ hashFiles('dependencies/**') }}
 
-      - name: Build or verify dependency prefixes
+      - name: Build dependency prefixes
+        if: steps.deps-cache.outputs.cache-hit != 'true'
         run: fork/ci/build-dependencies.sh
 
       - name: Save dependency prefixes
