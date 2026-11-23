@@ -37,6 +37,7 @@ struct SessionSettingsSheet: View {
                     if model.capabilities.statistics { stats(session) }
                     // The thermal session runs in a normal run; Recovery has no HAL.
                     if normalSession { PerformanceSection() }
+                    if UIDevice.current.userInterfaceIdiom == .phone, model.sessionPlan == nil { display }
                     if model.host.supportsPointer { pointer }
                     #if !APP_STORE
                     if let probe = model.inputProbe { inputProbe(probe) }
@@ -420,6 +421,22 @@ struct SessionSettingsSheet: View {
             .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 12, style: .continuous))
         }
         .padding(.vertical, 4)
+    }
+
+    // MARK: Display
+
+    /// Full screen: the guest also covers the rows beside the sensor housing
+    /// and the home indicator. Android does not know where the housing is, so
+    /// what it draws there is hidden.
+    private var display: some View {
+        Section {
+            Toggle(isOn: Binding(get: { model.fullScreen }, set: { model.fullScreen = $0 })) {
+                rowLabel("Full screen", symbol: "arrow.up.left.and.arrow.down.right")
+            }
+            .accessibilityIdentifier("fullScreen")
+        } footer: {
+            Text("Uses the whole screen, around the camera and the home bar. Android may draw under the camera.")
+        }
     }
 
     // MARK: Pointer

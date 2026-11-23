@@ -207,6 +207,14 @@ final class AppModel {
         let points = statedDisplayPoints ?? points
         if displayPoints != points { displayPoints = points }
     }
+    /// The defaults key of `fullScreen`.
+    static let fullScreenKey = "andariummax.fullScreen"
+    /// Whether the guest's display covers a phone's whole screen, the rows
+    /// beside the sensor housing and the home indicator included
+    /// (`SessionDisplayArea`). On until the person turns it off.
+    var fullScreen: Bool = UserDefaults.standard.object(forKey: AppModel.fullScreenKey) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(fullScreen, forKey: Self.fullScreenKey) }
+    }
     /// The person's choice of resolution on Home.
     func chooseResolution(_ scale: GuestDisplayScale) {
         chosenScale = scale

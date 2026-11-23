@@ -4951,6 +4951,28 @@
         }
       }
     },
+    "Full screen" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フルスクリーン"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全屏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全螢幕"
+          }
+        }
+      }
+    },
     "Getting the file…" : {
       "localizations" : {
         "ja" : {
@@ -12509,6 +12531,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "將指標用作觸控"
+          }
+        }
+      }
+    },
+    "Uses the whole screen, around the camera and the home bar. Android may draw under the camera." : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カメラとホームバーの周りを含め、画面全体を使います。Androidがカメラの下に描画することがあります。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用整个屏幕，包括相机和主屏幕指示条周围。Android可能会在相机下方绘制内容。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用整個螢幕，包括相機和主畫面指示條周圍。Android可能會在相機下方繪製內容。"
           }
         }
       }

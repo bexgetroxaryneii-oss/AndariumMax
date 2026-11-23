@@ -357,6 +357,17 @@ struct SessionDisplayAreaTests {
         #expect(pad == CGSize(width: 834, height: 1190))
     }
 
+    @Test func fullScreenGivesAPhoneItsSensorHousingAndHomeIndicatorRows() {
+        // iPhone 18 Pro Max: 440 x 956 pt; the island is 62 and the home indicator 34.
+        let phone = SessionDisplayArea.size(
+            home: CGSize(width: 440, height: 860), topInset: 62, bottomInset: 34, isPhone: true, fullScreen: true)
+        #expect(phone == CGSize(width: 440, height: 956))
+        // An iPad is unchanged: it already gives its bar to the display.
+        let pad = SessionDisplayArea.size(
+            home: CGSize(width: 834, height: 1166), topInset: 24, bottomInset: 20, isPhone: false, fullScreen: true)
+        #expect(pad == CGSize(width: 834, height: 1190))
+    }
+
     @Test func aWindowHasNoBarToGive() {
         let window = SessionDisplayArea.size(
             home: CGSize(width: 600, height: 760), topInset: 0, bottomInset: 0, isPhone: false)

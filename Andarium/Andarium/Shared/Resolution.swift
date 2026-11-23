@@ -211,6 +211,7 @@ struct DisplayAreaProbe: View {
                 }
             }
             .onChange(of: model.sessionPlan?.guest.size) { publish() }
+            .onChange(of: model.fullScreen) { publish() }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
@@ -228,7 +229,8 @@ struct DisplayAreaProbe: View {
         }
         model.displayPointsDidChange(
             SessionDisplayArea.size(
-                home: size, topInset: window.topInset, bottomInset: window.bottomInset, isPhone: window.isPhone))
+                home: size, topInset: window.topInset, bottomInset: window.bottomInset, isPhone: window.isPhone,
+                fullScreen: model.fullScreen))
     }
 }
 

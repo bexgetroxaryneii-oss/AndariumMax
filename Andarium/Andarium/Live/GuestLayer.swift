@@ -2,6 +2,7 @@
 
 import AndariumCore
 import SwiftUI
+import UIKit
 
 /// The guest's display, kept under the boot and the run so it is one view
 /// from the first frame to the last. The runtime draws into it; the boot
@@ -40,7 +41,9 @@ struct GuestLayer: View {
                     }
                     .frame(width: geo.size.width, height: geo.size.height)
                 }
-                .ignoresSafeArea(plan == nil ? [] : .all)
+                // Full screen on a phone: the guest also takes the rows beside
+                // the sensor housing and the home indicator.
+                .ignoresSafeArea(plan != nil || (model.fullScreen && UIDevice.current.userInterfaceIdiom == .phone) ? .all : [])
             }
         }
         .background {

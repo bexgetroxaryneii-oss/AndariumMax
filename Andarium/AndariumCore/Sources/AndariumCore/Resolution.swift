@@ -103,9 +103,16 @@ public enum SessionDisplayArea {
     /// phone with a home indicator (`bottomInset` above zero) has a sensor
     /// housing, which is its top inset and stays when the bar hides; a phone
     /// with a home button has only the bar's.
-    public static func size(home: CGSize, topInset: CGFloat, bottomInset: CGFloat, isPhone: Bool) -> CGSize {
-        let keepsTopInset = isPhone && bottomInset > 0
+    /// `fullScreen` gives a phone's sensor housing and home indicator rows to
+    /// the display too, so the guest fills the whole screen.
+    public static func size(
+        home: CGSize, topInset: CGFloat, bottomInset: CGFloat, isPhone: Bool, fullScreen: Bool = false
+    ) -> CGSize {
         let top = max(topInset, 0)
+        if isPhone && fullScreen {
+            return CGSize(width: home.width, height: home.height + top + max(bottomInset, 0))
+        }
+        let keepsTopInset = isPhone && bottomInset > 0
         return CGSize(width: home.width, height: home.height + (keepsTopInset ? 0 : top))
     }
 }
