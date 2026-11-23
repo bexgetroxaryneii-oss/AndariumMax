@@ -418,9 +418,21 @@ public:
         if (state_->pending.load(std::memory_order_acquire) != 0)
             return false;
         @try {
+            /* A guest stream that reopens in the format it had (Android
+             * leaving standby when sound starts again, a game starting a
+             * song) keeps the engine and the session: stopping one and
+             * deactivating the other made the first period of the new
+             * stream wait for the session to come back, and the route
+             * change that reactivation reports stopped the engine again
+             * and dropped what was queued. Only a new format stops the
+             * engine; the session is given back by reset() alone. */
+            const bool sameFormat = configured_ && format_ != nil &&
+                format_.sampleRate ==
+                    static_cast<double>(parameters.sampleRate) &&
+                format_.channelCount == parameters.channels;
             [player_ stop];
-            [engine_ stop];
-            deactivateSession();
+            if (!sameFormat)
+                [engine_ stop];
 #if TARGET_OS_IPHONE
             endStreamMute();
 #endif
@@ -460,8 +472,9 @@ public:
                     return false;
             }
             // An engine that is to be replaced is connected when its
-            // replacement is made, with the session active.
-            if (!health_.mustReplace(outputRouteUp(engine_))) {
+            // replacement is made, with the session active. One kept for
+            // the same format stays connected as it is.
+            if (!sameFormat && !health_.mustReplace(outputRouteUp(engine_))) {
                 [engine_ disconnectNodeOutput:player_];
                 NSError* connectError = nil;
                 if (![engine_ connect:player_
@@ -598,7 +611,8 @@ public:
         } @catch (NSException*) {
         }
         abortPending();
-        deactivateSession();
+        // The session stays held, so that the stream the guest opens next
+        // starts without reactivating it (see configure()).
 #if TARGET_OS_IPHONE
         endStreamMute();
 #endif

@@ -30,6 +30,15 @@ a long buffer keeps the usual cycle. macOS sets the cycle on the output device
 for this process. iOS asks the audio session, which runs at the shortest cycle
 its clients ask for, rounded to one the hardware supports.
 
+## Stream reopening
+
+Android closes its output when it falls silent (standby) and opens it again
+when sound returns. A stream released, or configured again in the format it
+had, keeps the sink's engine (paused, not stopped) and its hold on the audio
+session, so the next start resumes the engine instead of reactivating the
+session; only a new format stops the engine, and only `reset()` gives the
+session back.
+
 ## Playback pacing
 
 The guest's playback pointer advances with each completion, so the device must
