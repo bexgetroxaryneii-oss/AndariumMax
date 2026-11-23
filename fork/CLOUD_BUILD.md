@@ -1,8 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-2.0-or-later -->
 # AndariumMax cloud build
 
-Status: **configured and checked locally, not yet run in the cloud.** Nothing
-here has compiled on a Mac yet. The first run will show the real errors.
+Status: the workflow builds a complete IPA (Android system, kernel, runtime
+frameworks, AOT) on GitHub's `xcode-27` runner. Nothing here has run on a
+phone.
 
 ## 1. What the repository needs to build an IPA (Phase 1 report)
 
@@ -49,6 +50,7 @@ Mac by hand.
 | 1 Dependency prefixes | `build-dependencies.sh` | `.build/dependencies/...` | hash of `dependencies/**` |
 | 2 Android kernel bundle | `build-android-kernel.sh` | `.build/kernel/artifacts/...` | hash of `kernel/**` |
 | 3 Andarium IPA | `build-app.sh` | unsigned IPA + logs | — |
+| 4 Simulator tests | `run-simulator-tests.sh` | `AndariumTests` suites in the iOS Simulator | Simulator prefixes, hash of `dependencies/**` |
 
 The first run builds Mesa and the kernel and is long; later runs restore them
 in minutes unless their inputs change.
@@ -112,13 +114,13 @@ Local check (Linux, WSL, Git Bash): `fork/ci/validate-local.sh`. It checks
 the workflow's structure, script syntax and that every script the CI calls
 exists. It does **not** prove the cloud build compiles.
 
-## 6. Not verified yet
+## 6. Build host notes
 
-- Any compile on the runner (needs the repo on GitHub and a run).
-- Whether the iOS device runtime's configure also wants the `macos` host
-  dependency prefix; if it does, job 1 gets one more product.
-- Whether the free runner's disk (listed as 14 GB) holds the Mesa build; the
-  scripts print free space after each step.
-- Whether the rebuilt kernel's source tree matches upstream's (the script
-  checks and stops if not).
-- Anything on the phone.
+- Andarium reads an iOS 27.2 API, so the jobs take the installed Xcode with
+  the newest iOS SDK (27.2 on the runner image) instead of the default 27.1.
+- The AOT build needs an `fsck.erofs` with Zstandard; the job builds
+  erofs-utils 1.9.4 with libzstd (Homebrew's has none).
+- The rebuilt kernel has upstream's final tree and bridge ABI; only its
+  `release` string (the replay commit's ID) differs, so the descriptor is
+  rewritten on the runner, with a warning.
+- Anything on the phone is unverified.
