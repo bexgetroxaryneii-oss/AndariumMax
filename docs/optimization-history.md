@@ -873,3 +873,9 @@ the AArch64 gadget parts byte-identical.
 | Attempt | Disposition and lesson |
 | --- | --- |
 | Raise the gadget cache above its per-vCPU cap by what the process limit leaves the host GPU above 2048 MiB, up to the budget a host without a limit gives the same guest | Built, not measured. G296 to G298 found that a program whose translated code passes the cap is shed whole and translated again, and G297 that an Android guest at the cap relieves tens of times a session; the cap is the measured loads' ceiling on devices whose limit has no room to spare, and a macOS run already has no cap. The raise takes its bytes from B and leaves every searched line (the floor, the default's 992 MiB) where it was, which `runtime-guest-memory-budget` holds for every limit to 16 GiB. Whether a phone's limit leaves a raise at all, and what it does to reliefs, shed accounts and the worst frame gap of a game, is for the session record of a device run to say: compare `reliefs`, `shed`, `largest` and `gap` of the same game on the base and on this build. |
+
+## Performance fork: audio completions under a busy guest
+
+| Attempt | Disposition and lesson |
+| --- | --- |
+| Run the Virtio Sound service thread at the user-interactive QoS class | Built, not measured. The primary HAL's ALSA ring is 1024 frames (four 5 ms periods, about 21 ms), and every period the guest refills waits for a completion from the service thread, which had no QoS of its own while vCPU threads can fill every core. A game that renders at a high frame rate and crackles is the case to compare: count the guest's underruns (`dumpsys media.audio_flinger`) and listen, on the base and on this build. The ring itself is a release input; a larger one is the next candidate if completions on time do not cure it. |
