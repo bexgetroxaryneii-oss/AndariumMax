@@ -5,7 +5,7 @@
 # dependency prefixes (Mesa's software renderer with LLVM, the network
 # closure), the Simulator Android runtime and its frameworks, stage the
 # Android system, then `xcodebuild test` with the suites in TEST_SUITES
-# (default: JitTests). docs/testing.md and Andarium/README.md own the steps.
+# (default: the suites of AndariumTests/JitTests.swift). docs/testing.md and Andarium/README.md own the steps.
 #
 # Environment:
 #   TEST_SUITES   space-separated AndariumTests suites (default JitTests)
@@ -13,7 +13,7 @@
 
 source "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
 
-TEST_SUITES=${TEST_SUITES:-JitTests}
+TEST_SUITES=${TEST_SUITES:-JitPreferenceTests JitAnswerTests JitStatusTests JitStatusLaunchTests JitLaunchRequestTests JitAtLaunchTests}
 SYSTEM_URL=${SYSTEM_URL:-https://github.com/imxieyi/Kernarium/releases/download/1.0b15-release/lineage24-mainline6.18-4k-20261115-los24-r28.tar.gz}
 OUT=.build/ci
 LOGS=$OUT/logs
@@ -111,14 +111,19 @@ xcodebuild test -project Andarium/Andarium.xcodeproj -scheme Andarium \
 	2>&1 | tee "$LOGS/simulator-tests.log"
 status=${PIPESTATUS[0]}
 set -e
-grep -E "Test (Suite|Case)|✔|✘|passed|failed|error:" "$LOGS/simulator-tests.log" | tail -60 || true
+grep -E "Test run|✔|✘|Executed|error:" "$LOGS/simulator-tests.log" | tail -80 || true
+# Swift Testing reports "Test run with N tests ... passed"; a filter that
+# matches no suite runs nothing and still succeeds, which is a failure here.
+ran=$(grep -Eo 'Test run with [0-9]+ test' "$LOGS/simulator-tests.log" | grep -Eo '[0-9]+' | tail -1 || true)
+ran=${ran:-0}
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
 	{
-		echo "### Simulator tests ($TEST_SUITES): $([ "$status" = 0 ] && echo passed || echo FAILED)"
+		echo "### Simulator tests: $([ "$status" = 0 ] && [ "$ran" -gt 0 ] && echo "passed ($ran tests)" || echo FAILED)"
 		echo '```'
-		grep -E "✔|✘|passed after|failed after|error:" "$LOGS/simulator-tests.log" | tail -40
+		grep -E "Test run|✘|error:" "$LOGS/simulator-tests.log" | tail -40 || true
 		echo '```'
 	} >>"$GITHUB_STEP_SUMMARY"
 fi
 [ "$status" = 0 ] || fail "simulator tests failed (exit $status)"
-note "simulator tests passed"
+[ "$ran" -gt 0 ] || fail "no test ran: check TEST_SUITES ($TEST_SUITES)"
+note "simulator tests passed: $ran tests"
