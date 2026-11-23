@@ -97,3 +97,34 @@ ensure_metal_toolchain()
 	note "downloading Xcode's Metal Toolchain component"
 	xcodebuild -downloadComponent MetalToolchain
 }
+
+sdk_at_least()
+{
+	# sdk_at_least VERSION: the selected iOS SDK is VERSION or newer.
+	python3 -c 'import sys; v = lambda s: [int(p) for p in s.split(".")]; sys.exit(0 if v(sys.argv[2]) >= v(sys.argv[1]) else 1)' \
+		"$1" "$(xcrun --sdk iphoneos --show-sdk-version)"
+}
+
+# select_xcode_with_sdk VERSION: Andarium uses API of the iOS 27.2 SDK, so
+# take the Xcode with the newest iOS SDK when the default one is older.
+select_xcode_with_sdk()
+{
+	if sdk_at_least "$1"; then
+		note "iOS SDK $(xcrun --sdk iphoneos --show-sdk-version) ($(xcodebuild -version | head -1))"
+		return
+	fi
+	local newest="" best="0" app sdk
+	for app in /Applications/Xcode*.app; do
+		sdk=$(DEVELOPER_DIR="$app/Contents/Developer" xcrun --sdk iphoneos --show-sdk-version 2>/dev/null) || continue
+		note "$app: iOS SDK $sdk"
+		if python3 -c 'import sys; v = lambda s: [int(p) for p in s.split(".")]; sys.exit(0 if v(sys.argv[1]) > v(sys.argv[2]) else 1)' "$sdk" "$best"; then
+			best=$sdk
+			newest=$app
+		fi
+	done
+	if [ -n "$newest" ]; then
+		export DEVELOPER_DIR="$newest/Contents/Developer"
+		note "selected $newest"
+	fi
+	note "iOS SDK $(xcrun --sdk iphoneos --show-sdk-version) ($(xcodebuild -version | head -1))"
+}

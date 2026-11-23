@@ -26,6 +26,14 @@ on:
         description: Build the ahead-of-time code from the release
         type: boolean
         default: true
+      simulator_tests:
+        description: Also run Andarium's model tests in the iOS Simulator (separate job)
+        type: boolean
+        default: true
+      test_suites:
+        description: AndariumTests suites for the Simulator job
+        required: false
+        default: "JitTests"
 
 permissions:
   contents: read
@@ -178,6 +186,64 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-logs-run${{ github.run_number }}
+          path: .build/ci/logs
+          if-no-files-found: ignore
+          retention-days: 14
+
+  simulator-tests:
+    name: 4 · Simulator tests
+    needs: kernel
+    if: ${{ inputs.simulator_tests }}
+    runs-on: xcode-27
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore kernel bundle
+        uses: actions/cache/restore@v4
+        with:
+          path: .build/kernel/artifacts
+          key: kernel-android-${{ hashFiles('kernel/**') }}
+          fail-on-cache-miss: true
+
+      - name: Restore kernel host tools
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .build/dependencies/ios-device-arm64
+            .build/dependencies/apple-gpu-vulkan-experiment/ios-device-arm64
+            .build/dependencies/kernel-host-tools
+          key: deps-ios-device-${{ runner.arch }}-${{ hashFiles('dependencies/**') }}
+          fail-on-cache-miss: true
+
+      - name: Restore Simulator prefixes
+        id: sim-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .build/dependencies/ios-simulator-arm64
+            .build/dependencies/apple-gpu-vulkan-experiment/ios-simulator-arm64
+          key: deps-ios-simulator-${{ runner.arch }}-${{ hashFiles('dependencies/**') }}
+
+      - name: Build and run the Simulator tests
+        env:
+          TEST_SUITES: ${{ inputs.test_suites }}
+        run: fork/ci/run-simulator-tests.sh
+
+      - name: Save Simulator prefixes
+        if: always() && steps.sim-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .build/dependencies/ios-simulator-arm64
+            .build/dependencies/apple-gpu-vulkan-experiment/ios-simulator-arm64
+          key: ${{ steps.sim-cache.outputs.cache-primary-key }}
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-test-logs-run${{ github.run_number }}
           path: .build/ci/logs
           if-no-files-found: ignore
           retention-days: 14
