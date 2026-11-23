@@ -31,9 +31,9 @@ on:
         type: boolean
         default: true
       test_suites:
-        description: AndariumTests suites for the Simulator job
+        description: AndariumTests suites for the Simulator job (empty = the JIT suites)
         required: false
-        default: "JitTests"
+        default: ""
 
 permissions:
   contents: read
@@ -227,8 +227,10 @@ jobs:
 
       - name: Build and run the Simulator tests
         env:
-          TEST_SUITES: ${{ inputs.test_suites }}
-        run: fork/ci/run-simulator-tests.sh
+          TEST_SUITES_INPUT: ${{ inputs.test_suites }}
+        run: |
+          [ -z "$TEST_SUITES_INPUT" ] || export TEST_SUITES="$TEST_SUITES_INPUT"
+          fork/ci/run-simulator-tests.sh
 
       - name: Save Simulator prefixes
         if: always() && steps.sim-cache.outputs.cache-hit != 'true'
